@@ -1,20 +1,38 @@
-str_to_gene <- function(x, to_list = F, print = T){
+str_to_gene <- function(x, to_clipboard = F, as_list = F, print = T){
   if(missing(x)) {
     if(clipr::clipr_available()){
       x <- clipr::read_clip()
     }else{
-      stop()
+      stop("system clipboard is not available")
     }
   }
-  tmp <- unlist(str_split(str_squish(str_replace_all(x, "[^a-zA-Z0-9\\-\\.]", " ")), " "))
-  if(doPrint) print(tmp)
-  return(tmp)
+  geneList <-
+    stringr::str_split( # split by space
+      stringr::str_squish( # squish multiple sapces into one space
+        stringr::str_replace_all( # replace all non-symbol-charactor with a space
+          x, "[^a-zA-Z0-9\\-\\.]", " ")
+        ), " ")
+  names(geneList) <- names(x) # set names if available
+  if(!as_list) {
+    geneList <- unlist(geneList)
+    if(anyDuplicated(geneList)){
+      message("returned gene list is redundant! you may use unique() to deduplicate it.")
+    }
+  }else{
+    dup_ind <- paste(which(sapply(geneList, anyDuplicated) > 0), collapse = ', ')
+    message(stringr::str_glue("There are duplicated genes in list of index {dup_ind}"))
+  }
+  if(print) print(geneList)
+  if(to_clipboard) clipr::write_clip(geneList) else return(geneList)
 }
 
-str_collapse <- function(x){
-  #sort(unique(strsplit(paste0(x, sep = "", collapse = ""), "")[[1]]))
-  require(stringr)
-  unique(str_sort(str_split(str_flatten(x), "", simplify = F)[[1]]))
+str_to_char <- function(x, unique = T, sort = T, ...){
+  chars <- stringr::str_split(
+    stringr::str_flatten(unlist(x)),
+    "", simplify = F)[[1]]
+  if(unique) chars <- unique(chars)
+  if(sort) chars <- sort(chars, ...)
+  return(chars)
 }
 
 # vector insertion
