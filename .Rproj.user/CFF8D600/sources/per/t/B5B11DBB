@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1585063499868.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2050527865",
+    "id" : "B5B11DBB",
+    "lastKnownWriteTime" : 1585066108,
+    "last_content_update" : 1585066108487,
+    "path" : "D:/lizc07/Github/convgene/R/stringToGene.R",
+    "project_path" : "R/stringToGene.R",
+    "properties" : {
+        "cursorPosition" : "2,24",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
