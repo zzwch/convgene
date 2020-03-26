@@ -1,4 +1,21 @@
-str_to_gene <- function(x, to_clipboard = F, as_list = F, print = T){
+#' convert string vector to list/vector of genes
+#'
+#' @param x a string with multiple gene symbols seperated by non-numeric/letter/hyphen (Depends on REGEX parameter below); numeric/letter/hyphen charactor will be treated as parts of gene symbols. A vector of strings is also supported, in which case you can choose to return list. If missing of x, the string will be read from system clipboard automately (I like it!).
+#' @param to_clipboard If `False` return a charactor vector of gene symbols (default), if `TRUE` return value to clipboard
+#' @param as_list If `FALSE` (default) return value is a vector. If `TRUE` reutrn value is structured in list, this is useful when `to_clipboard=T` so that you can paste the return (symbols with quoted) to python.
+#' @param print print the return or not. (default: FALSE)
+#' @param REGEX a regular expression used for identifying chars of gene symbols. Default setting should work in most cases. You can also customize it yourself.
+#'
+#' @return A charactor vector of gene symbols or A list of vectors (with names if x named) in case of as_list=T
+#' @export
+#'
+#' @examples
+#' # you can copy some text from anywhere (a research article for example) and then str_to_gene() will help to parse it into gene vector.
+#' str_to_gene()
+#' # custom string of genes
+#' str_to_gene(x = "Runx1, Gata4 Gata1;, Dll4, Nkx2-5, NOTAGENE") # note: the function does not check validity of gene symbols
+#' str_to_gene(x = c(Hematopoietic ="Runx1 Gata4 GATA1", Ery = "Gypa Gype Ptprc", Endothelial = "Pecam1 Cdh5"), as_list = T)
+str_to_gene <- function(x, to_clipboard = F, as_list = F, print = F, REGEX = "[^a-zA-Z0-9\\-\\.]"){
   if(missing(x)) {
     if(clipr::clipr_available()){
       x <- clipr::read_clip()
@@ -10,7 +27,7 @@ str_to_gene <- function(x, to_clipboard = F, as_list = F, print = T){
     stringr::str_split( # split by space
       stringr::str_squish( # squish multiple sapces into one space
         stringr::str_replace_all( # replace all non-symbol-charactor with a space
-          x, "[^a-zA-Z0-9\\-\\.]", " ")
+          x, REGEX, " ")
         ), " ")
   names(geneList) <- names(x) # set names if available
   if(!as_list) {
@@ -19,14 +36,31 @@ str_to_gene <- function(x, to_clipboard = F, as_list = F, print = T){
       message("returned gene list is redundant! you may use unique() to deduplicate it.")
     }
   }else{
-    dup_ind <- paste(which(sapply(geneList, anyDuplicated) > 0), collapse = ', ')
-    message(stringr::str_glue("There are duplicated genes in list of index {dup_ind}"))
+    dup_ind <- which(sapply(geneList, anyDuplicated) > 0)
+    if(length(dup_ind)>0){
+      dup_ind <- paste(dup_ind, collapse = ', ')
+      message(stringr::str_glue("There are duplicated genes in list of index {dup_ind}"))
+    }
   }
   if(print) print(geneList)
-  if(to_clipboard) clipr::write_clip(geneList) else return(geneList)
+  if(to_clipboard) suppressWarnings(clipr::write_clip(geneList)) else return(geneList)
 }
 
-str_to_char <- function(x, unique = T, sort = T, ...){
+#' convert string into a vector of each char
+#'
+#' @param x a string or a vector of strings. Note if a vector supplied, it will be collapsed. If you wanna multiple vectors of char returned, you can use sapply() to wrapper the function.
+#' @param unique If `TRUE` chars should be uniqued, otherwise as it is.
+#' @param sort If `TRUE` chars should be sorted by alphabetic, otherwise as it is.
+#' @param ... more parameters to be used in sort(). such as order decreasing = T if you like.
+#'
+#' @return a vector of chars
+#' @export
+#'
+#' @examples
+#' str_to_char(x = c("Here it is"), unique = F, sort = F)
+#' str_to_char(x = c("Yes", "or", "Not"), unique = F, sort = F)
+#' sapply(c("Yes", "or", "Not"), str_to_char, sort = F, unique = F)
+str_to_char <- function(x, unique = F, sort = F, ...){
   chars <- stringr::str_split(
     stringr::str_flatten(unlist(x)),
     "", simplify = F)[[1]]
