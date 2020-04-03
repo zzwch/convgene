@@ -75,3 +75,32 @@
 - [Metabolism]( https://www.genome.jp/dbget-bin/www_bget?pathway+hsa01100)
 
   - genes included in all metabolic pathways
+  
+- [MSigDB genesets](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp)
+
+  > The 25724 gene sets in the Molecular Signatures Database (MSigDB) are divided into 8 major collections, and several sub-collections.
+  - [**H**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=H) (hallmark gene sets, 50 gene sets)
+  - [**C1**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=C1) (positional gene sets, 299 gene sets)
+  - [**C2**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=C2) (curated gene sets, 5529 gene sets)
+    - [**CGP**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CGP) (chemical and genetic perturbations, 3297 gene sets)
+    - [**CP**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CP) (Canonical pathways, 2232 gene sets)
+      - [**CP:BIOCARTA**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CP:BIOCARTA) (BioCarta gene sets, 289 gene sets)
+      - [**CP:KEGG**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CP:KEGG) (KEGG gene sets, 186 gene sets)
+      - [**CP:PID**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CP:PID) (PID gene sets, 196 gene sets)
+      - [**CP:REACTOME**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CP:REACTOME) (Reactome gene sets, 1532 gene sets)
+  - [**C3**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=C3) (regulatory target gene sets, 3735 gene sets)
+    - [**MIR**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=MIR) (microRNA targets, 2598 gene sets)
+      - [**MIR:MIR_Legacy**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=MIR:MIR_Legacy) (Legacy microRNA targets, 221 gene sets)
+      - [**MIR:MIRDB**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=MIR:MIRDB) (MIRDB microRNA targets, 2377 gene sets)
+    - [**TFT**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=TFT) (All transcription factor targets, 1137 gene sets)
+      - [**TFT:GTRD**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=TFT:GTRD) (GTRD transcription factor targets, 526 gene sets)
+      - [**TFT:TFT_Legacy**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=TFT:TFT_Legacy) (Legacy transcription factor targets, 611 gene sets)
+  - [**C4**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=C4) (computational gene sets, 858 gene sets)
+    - [**CGN**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CGN) (cancer gene neighborhoods, 427 gene sets)
+    - [**CM**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CM) (cancer modules, 431 gene sets)
+  - [**C5**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=C5) (GO gene sets, 10192 gene sets)
+    - [**BP**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=BP) (GO biological process, 7530 gene sets)
+    - [**CC**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=CC) (GO cellular component, 999 gene sets)
+    - [**MF**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=MF) (GO molecular function, 1663 gene sets)
+  - [**C6**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=C6) (oncogenic signatures, 189 gene sets)
+  - [**C7**](https://www.gsea-msigdb.org/gsea/msigdb/genesets.jsp?collection=C7) (immunologic signatures, 4872 gene sets)
