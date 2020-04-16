@@ -1,3 +1,48 @@
+---
+title: "Convegene"
+author: "Hazard"
+date: "2020/4/16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+rm(list = ls())
+```
+
+# convegene
+This package is designed to conveniently convert gene between human and mouse.
+Hope it may be valuable for researcher/bioinformatican on analyses of human/mouse data.
+
+## functions
+some functions
+Here I get a stirng of genes from a literature,
+`Cdh5 Ptprc Unc5b CD14 CD15 CD33`
+I want to check their expression in my dataset.
+first, I need to split the string into a vector of gene symbols.    
+second, I may check the official gene symbol for some of them.   
+third, I want to check their homologous genes in human.   
+
+I also want to get all the gene IDs commonly used for my selected genes.   
+Or even export a html for external searching in web browser.   
+
+So I write down some functions to realize this routinely need in my work.   
+str_to_gene(): split a string into a vector of genes
+alias_to_official(): map alias to official symbols or IDs
+gene_to_homo(): get homologous genes for the input genes
+all_to_html(): export the gene tables into a local searchable html
+
+### alias_to_official()
+```{r}
+library(org.Hs.eg.db)
+library(org.Mm.eg.db)
+
+```
+
+
+### str_to_gene()
+```{r}
 #' convert string vector to list/vector of genes
 #'
 #' @param x a string with multiple gene symbols seperated by non-numeric/letter/hyphen (Depends on REGEX parameter below); numeric/letter/hyphen charactor will be treated as parts of gene symbols. A vector of strings is also supported, in which case you can choose to return list. If missing of x, the string will be read from system clipboard automately (I like it!).
@@ -46,6 +91,10 @@ str_to_gene <- function(x, to_clipboard = F, as_list = F, print = F, REGEX = "[^
   if(to_clipboard) suppressWarnings(clipr::write_clip(geneList)) else return(geneList)
 }
 
+```
+
+### str_to_char()
+```{r}
 #' convert string into a vector of each char
 #'
 #' @param x a string or a vector of strings. Note if a vector supplied, it will be collapsed. If you wanna multiple vectors of char returned, you can use sapply() to wrapper the function.
@@ -68,6 +117,13 @@ str_to_char <- function(x, unique = F, sort = F, ...){
   if(sort) chars <- sort(chars, ...)
   return(chars)
 }
+
+```
+
+
+
+### insertVector
+```{r}
 
 # vector insertion
 insertVector <- function(x, index, value){
@@ -102,3 +158,5 @@ insertVector <- function(x, index, value){
 
   return(ret)
 }
+```
+
