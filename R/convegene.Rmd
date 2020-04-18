@@ -36,8 +36,12 @@ all_to_html(): export the gene tables into a local searchable html
 ### alias_to_official()
 ```{r}
 library(org.Hs.eg.db)
-library(org.Mm.eg.db)
+#library(org.Mm.eg.db)
+columns(org.Hs.eg.db)
 
+clusterProfiler::bitr(toupper(genes), fromType = "ALIAS", toType = "SYMBOL", OrgDb = org.Hs.eg.db)
+genes <- c("CD14", "CDH5")
+select(org.Hs.eg.db, keys = genes, columns = c("SYMBOL", "ALIAS"), keytype = "SYMBOL")
 ```
 
 
