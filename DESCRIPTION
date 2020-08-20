@@ -1,15 +1,32 @@
 Package: convgene
 Type: Package
 Title: This package is designed to conveniently convert gene between human and mouse.
-Version: 0.1.0
+Version: 0.1.1
 Author: Zongcheng Li
 Maintainer: Zongcheng Li <zzwchsxx@gmail.com>
 Description: This package is designed to conveniently convert gene between human and mouse.
     Hope it may be valuable for researcher/bioinformatican on analyses of human/mouse data.
-License: Apache-2.0
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Imports: 
     clipr,
-    stringr
-RoxygenNote: 7.1.0
+    stringr,
+    ggplot2,
+    RColorBrewer,
+    pheatmap,
+    reshape2
+RoxygenNote: 7.1.1
+Suggests: 
+    testthat,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Collate: 
+    'utils.R'
+    'pl.R'
+    'pp.R'
+    'str_to.R'
+    'tl.R'
+Depends: 
+    R (>= 2.10)
