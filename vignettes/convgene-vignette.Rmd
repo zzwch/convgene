@@ -1,0 +1,69 @@
+---
+title: "convgene-vignette"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{convgene-vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, eval = F}
+library(convgene)
+```
+
+# Heading 1
+## Heading 2
+### Heading 3
+
+--------
+
+********
+
+* Bulleted list
+* Item 2
+    * Nested bullets need a 4-space indent.
+    * Item 2b
+
+ * It's possible to put multiple paragraphs of text in a list item. 
+
+    But to do that, the second and subsequent paragraphs must be
+    indented by four or more spaces. It looks better if the first
+    bullet is also indented.
+    
+    
+1. Item 1
+1. Item 2
+1. Items are numbered automatically, even though they all start with 1.
+
+1.  Item 1.
+    *  Item a
+    *  Item b
+1.  Item 2.
+
+Definition
+  : a statement of the exact meaning of a word, especially in a dictionary.
+  
+List 
+  : a number of connected items or names written or printed consecutively, 
+    typically one below the other. 
+  : barriers enclosing an area for a jousting tournament.
+  
+  
+_italic_ or *italic*
+__bold__ or **bold**    
+[link text](destination)
+<http://this-is-a-raw-url.com>
+
+
+| Right | Left | Default | Center |
+|------:|:-----|---------|:------:|
+|   12  |  12  |    12   |    12  |
+|  123  |  123 |   123   |   123  |
+|    1  |    1 |     1   |     1  |
