@@ -1,7 +1,7 @@
 
 #' calculate average/median and percentage expression of features (eg. genes) in groups
 #'
-#' @param data expression matrix of feature by cell, ususally normalized (in log scale) but not feature scaled.
+#' @param data expression matrix of feature by cell, ususally normalized (in log scale) but not feature scaled. A matrix is better than data.frame in case of duplicated features.
 #' @param features features to be visualized
 #' @param group_by a vector including cell annotations
 #' @param groups only these selected groups to be visualized
@@ -41,7 +41,7 @@ SummariseDataByGroup <- function(
       data <- rbind(data, pseudo_data)
       warning("missing features above will be set to 0\n")
     }
-    features <- intersect(features, rownames(data))
+    features <- features[features %in% rownames(data)] # do not use intersect in case of duplicated features
   }
 
   # subset groups and set group_by as factor and drop group_by levels
@@ -211,9 +211,34 @@ write_genesToMeatascape <- function(genes, group_by, txt_file, top_n = NULL){
     if(is.null(top_n)){
       txtLine <- paste0(i, "\t", paste0(genes[group_by == i], collapse = ","))
     }else if(top_n > 0){
-      txtLine <- paste0(i, "\t", paste0(genes[group_by == i][1:round(topn)], collapse = ","))
+      txtLine <- paste0(i, "\t", paste0(genes[group_by == i][1:round(top_n)], collapse = ","))
     }
     writeLines(text = txtLine, con = txtfile)
   }
   close(txtfile)
 }
+
+#' Infer the scale factor used for normalization
+#'
+#' @param x matrix or data.frame
+#' @param log_base normalization log scaled base
+#' @param pseudo_count usually 1.
+#'
+#' @return
+#' @export
+#'
+#' @examples
+InferScaleFactor <- function(x, log_base = base::exp(1), pseudo_count = 1){
+  unique(round(as.matrix(colSums(log_base^x-pseudo_count))))
+}
+
+#' discrete colors imported from scanpy.pl.palettes
+#'
+#' A list containing the colors used in scanpy
+#'
+#' @format A list with 4 different palettes of 10, 20, 26, 64 colors.
+#' @source \url{https://github.com/theislab/scanpy/issues/387},
+#' \url{https://github.com/vega/vega/wiki/Scales#scale-range-literals},
+#' \url{https://graphicdesign.stackexchange.com/questions/3682/where-can-i-find-a-large-palette-set-of-contrasting-colors-for-coloring-many-d},
+#' \url{http://godsnotwheregodsnot.blogspot.de/2012/09/color-distribution-methodology.html}
+"scanpy_colors"

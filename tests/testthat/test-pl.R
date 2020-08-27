@@ -26,3 +26,7 @@ test_that("pl_tableHeatmap", {
 test_that("tl_crossTableEnrichment", {
   expect_error(tl_crossTableEnrichment(table(meta_data$Cluster, meta_data$Batch)), NA)
 })
+
+test_that("write_genesToMeatascape", {
+  expect_error(write_genesToMeatascape(rep("GeneA", 10), rep(c("A", "B"), each = 5)), NA)
+})

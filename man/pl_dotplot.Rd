@@ -17,6 +17,7 @@ pl_dotplot(
   cap_value = NULL,
   swap_axes = F,
   plot_gene_force = F,
+  duplicate_features = T,
   gradientn_colors = c("grey90", "grey", "orange", "red", "brown"),
   title = NULL
 )
@@ -45,6 +46,8 @@ pl_dotplot(
 \item{swap_axes}{swap x-axis and y-axis or not. (default: False)}
 
 \item{plot_gene_force}{Force plot gene, which is missing in data.}
+
+\item{duplicate_features}{whether display duplicate features or not.}
 
 \item{gradientn_colors}{the color vector for visualization.}
 

@@ -23,6 +23,7 @@ NULL
 #' @param plot_gene_force Force plot gene, which is missing in data.
 #' @param gradientn_colors the color vector for visualization.
 #' @param title title to display in the top.
+#' @param duplicate_features whether display duplicate features or not.
 #'
 #' @return a ggplot object
 #' @import ggplot2
@@ -42,6 +43,7 @@ pl_dotplot <- function(
   cap_value = NULL,
   swap_axes = F,
   plot_gene_force = F,
+  duplicate_features = T,
   gradientn_colors = c("grey90","grey", "orange", "red","brown"),
   title = NULL){
 
@@ -59,8 +61,15 @@ pl_dotplot <- function(
   meanData <- ret_tmp$mean; percData <- ret_tmp$percentage; rm(ret_tmp)
 
   # prepare data to plot
-  dotData <- cbind(reshape2::melt(meanData), reshape2::melt(percData))[,-c(4,5)]
-  colnames(dotData) <- c("Group", "Features", "Average", "Proportion")
+  if(duplicate_features) {
+    features_ <- colnames(meanData); colnames(meanData) <- NULL; colnames(percData) <- NULL
+    dotData <- cbind(reshape2::melt(meanData), reshape2::melt(percData))[,-c(4,5)]
+    colnames(dotData) <- c("Group", "Features", "Average", "Proportion")
+    dotData$Features <- factor(dotData$Features)
+  }else{
+    dotData <- cbind(reshape2::melt(meanData), reshape2::melt(percData))[,-c(4,5)]
+    colnames(dotData) <- c("Group", "Features", "Average", "Proportion")
+  }
   if(swap_axes) dotData$Group <- factor(dotData$Group, levels =  rev(levels(dotData$Group)))
 
   # set cap_value
@@ -90,6 +99,10 @@ pl_dotplot <- function(
           plot.title = element_text(hjust = 0.5),
           panel.border = element_rect(linetype = 1, color = "black", fill = NA)) +
     labs(x = NULL, y = NULL, title = title)
+
+  if(duplicate_features){
+    p <- if(swap_axes) p + scale_x_discrete(labels = features_) else p + scale_y_discrete(labels = features_)
+  }
   # return plot
   return(p)
 }
@@ -297,4 +310,58 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
 
   return(p)
 }
+
+
+#' Dimensional reduction plot
+#'
+#' Enhanced DimPlot of Seurat v3
+#'
+#' @param object Seurat object
+#' @param group_by Name of one or more metadata columns to group (color) cells by (for example, orig.ident); pass 'ident' to group by identity class
+#' @param ncol Number of columns for display when faceting plots
+#' @param subset_by enhanced option, subset cells by the colname.
+#' @param subset_groups enhanced option, subset cells of these categories.
+#' @param subset_cells A vector of cell names. if not NULL, subset these cells, otherwise use subset_by and subset_groups
+#' @param reduction Which dimensionality reduction to use. e.g. umap, tsne, pca
+#' @param dims Dimensions to plot, must be a two-length numeric vector specifying x- and y-dimensions
+#' @param pt.size Adjust point size for plotting
+#' @param cols Vector of colors, each color corresponds to an identity class.
+#'
+#' @return a ggplot object
+#' @export
+#'
+#' @examples
+pl_dimplot <- function(object, group_by, ncol = 2,
+                      subset_by = NULL, subset_groups = NULL, subset_cells = NULL,
+                      reduction = "umap", dims = c(1,2), pt.size = 1,
+                      cols = scanpy_colors$default_64){
+
+  if(is.null(subset_cells)){
+    if(!is.null(subset_groups) && !is.null(subset_by)){
+      subset_cells <- rownames(object@meta.data[object@meta.data[,subset_by] %in% subset_groups,])
+    }
+  }
+
+  embeddings <- Embeddings(object, reduction = reduction)[,dims]
+  dims <- colnames(embeddings)
+
+  ggData <- reshape2::melt(cbind(object@meta.data[,group_by], embeddings),
+                           id.vars = dims,
+                           measure.vars = group_by,
+                           variable.name = "group_by", value.name = "value")
+  ggData2 <- reshape2::melt(cbind(object@meta.data[,group_by], embeddings)[subset_cells,],
+                            id.vars = dims,
+                            measure.vars = group_by,
+                            variable.name = "group_by", value.name = "value")
+  p <- ggplot() +
+    geom_point(mapping = aes_string(dims[1], dims[2]), color = "grey80", data = ggData, size = pt.size) +
+    geom_point(mapping = aes_string(dims[1], dims[2], color = "value"), data = ggData2, size = pt.size) +
+    facet_wrap(~group_by, ncol = ncol) +
+    guides(color = guide_legend(override.aes = list(size = 3*pt.size))) +
+    theme_classic()
+  if(!is.null(cols)) p <- p + scale_color_manual(values = cols)
+
+  return(p)
+}
+
 

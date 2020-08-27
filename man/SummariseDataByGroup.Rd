@@ -19,7 +19,7 @@ SummariseDataByGroup(
 )
 }
 \arguments{
-\item{data}{expression matrix of feature by cell, ususally normalized (in log scale) but not feature scaled.}
+\item{data}{expression matrix of feature by cell, ususally normalized (in log scale) but not feature scaled. A matrix is better than data.frame in case of duplicated features.}
 
 \item{features}{features to be visualized}
 

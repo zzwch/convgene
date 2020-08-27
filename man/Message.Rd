@@ -13,7 +13,7 @@ Message(head = NULL, items = NULL, item_sep = ", ", tail = "\\n")
 
 \item{item_sep}{item seperator}
 
-\item{tail}{tail of message. `\n` should be used at the end always.}
+\item{tail}{tail of message. `\n`` should be used at the end always.}
 }
 \value{
 a string
