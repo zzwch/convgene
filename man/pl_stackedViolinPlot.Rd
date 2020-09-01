@@ -35,3 +35,6 @@ a ggplot object
 \description{
 stacked Violin Plots in one plot
 }
+\examples{
+
+}

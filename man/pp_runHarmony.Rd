@@ -21,3 +21,6 @@ Seurat (version 3) object.
 \description{
 RunHarmony did not support dims.use actually, so I wrote this wrapper function to support that.
 }
+\examples{
+
+}

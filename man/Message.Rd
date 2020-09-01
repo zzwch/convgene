@@ -9,15 +9,18 @@ Message(head = NULL, items = NULL, item_sep = ", ", tail = "\\n")
 \arguments{
 \item{head}{head of message}
 
-\item{items}{join multiple `items` into a single string with `item_sep` as seperator.}
+\item{items}{join multiple items into a single string with item_sep as seperator.}
 
 \item{item_sep}{item seperator}
 
-\item{tail}{tail of message. `\n`` should be used at the end always.}
+\item{tail}{tail of message. \\n should be used at the end always.}
 }
 \value{
 a string
 }
 \description{
 format a text message
+}
+\examples{
+
 }

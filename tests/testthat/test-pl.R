@@ -30,3 +30,8 @@ test_that("tl_crossTableEnrichment", {
 test_that("write_genesToMeatascape", {
   expect_error(write_genesToMeatascape(rep("GeneA", 10), rep(c("A", "B"), each = 5)), NA)
 })
+
+
+test_that("man/pl_scatterplot.Rd", {
+  expect_error(pl_scatterplot(meta_data, x = "G2M.Score", y = "S.Score"), NA)
+})

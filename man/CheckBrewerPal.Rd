@@ -17,3 +17,6 @@ a vector of colors
 \description{
 Check pal in brewer
 }
+\examples{
+
+}

@@ -19,3 +19,6 @@ a matrix of pvalues
 \description{
 statistics of cross table
 }
+\examples{
+
+}

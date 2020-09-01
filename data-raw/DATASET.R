@@ -2,6 +2,16 @@
 
 
 
+# genesets
+genesets <- list()
+gs_mmu <- list(cc.genes = Seurat::cc.genes,
+               cc.genes.updated.2019 = Seurat::cc.genes.updated.2019,
+               cc.genes.union = mapply(union, Seurat::cc.genes, Seurat::cc.genes.updated.2019)
+               )
+gs_hsa <- list(cc.genes = Seurat::cc.genes,
+               cc.genes.updated.2019 = Seurat::cc.genes.updated.2019,
+               cc.genes.union = mapply(union, Seurat::cc.genes, Seurat::cc.genes.updated.2019))
+
 # scanpy_colors
 scanpy_colors <- list(
   vega_10_scanpy = c('#1f77b4', '#ff7f0e', '#279e68', '#d62728', '#aa40fc', '#8c564b', '#e377c2', '#7f7f7f', '#b5bd61', '#17becf'),
@@ -26,4 +36,32 @@ scanpy_colors <- list(
               '#8c564b', '#c49c94', '#e377c2', '#f7b6d2', '#7f7f7f', '#c7c7c7', '#bcbd22', '#dbdb8d', '#17becf', '#9edae5')
 )
 
-usethis::use_data(scanpy_colors, overwrite = TRUE)
+# discret colors
+discrete_colors <- list(
+  phase = setNames(c("#46ACC8", "#E2D200", "#DD8D29"), c("G0/G1", "S", "G2/M"))
+)
+
+# lightening colors
+gradient_colors <- list(
+  f_gOrRd = function(n) c("grey",RColorBrewer::brewer.pal(n, name = "OrRd")),
+  f_g9YlGn = function(n) c("grey90", RColorBrewer::brewer.pal(n, "YlGn")[-1]),
+  f_DbGrBr = function(n, interpolate = "linear")
+    colorRampPalette(c("darkblue", "royalblue","grey100","tomato", "brown"),
+                     interpolate = interpolate, alpha = T)(n),
+  f_DbWtRd = function(n, interpolate = "linear")
+    colorRampPalette(c("darkblue","white", "red"),
+                     interpolate = interpolate, alpha = T)(n),
+  f_BuWtRd = function(n, interpolate = "linear")
+    colorRampPalette(c("blue","white", "red"),
+                     interpolate = interpolate, alpha = T)(n),
+  f_BuRd = function(n) rev(RColorBrewer::brewer.pal(n, "RdBu")),
+  f_BuYlRd = function(n) rev(RColorBrewer::brewer.pal(n, "RdYlBu")),
+  f_Spectral = function(n) rev(RColorBrewer::brewer.pal(n, "Spectral")),
+  f_brewer = function(n, name) rev(RColorBrewer::brewer.pal(n, name)),
+  gyr = c("grey", "yellow", "red"),
+  g9gorb = c("grey90","grey", "orange", "red","brown"),
+  gg9gorb = c( "grey96", "grey90","gray","orange", "red","brown")
+)
+
+usethis::use_data(scanpy_colors, discrete_colors, gradient_colors,
+                  overwrite = TRUE)

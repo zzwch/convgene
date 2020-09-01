@@ -31,3 +31,6 @@ A vector of variable features
 \description{
 Identifies Highly variable features (HVFs) for each batch, then combine them into a single vector of HVFs by count.
 }
+\examples{
+
+}

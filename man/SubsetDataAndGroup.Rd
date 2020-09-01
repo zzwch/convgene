@@ -11,13 +11,16 @@ SubsetDataAndGroup(data, group_by, groups = NULL, droplevels = T)
 
 \item{group_by}{a vector including cell annotations}
 
-\item{groups}{subset these selected groups. set `NULL` to use all.}
+\item{groups}{subset these selected groups. set NULL to use all.}
 
-\item{droplevels}{drop the unused levels in `group_by`}
+\item{droplevels}{drop the unused levels in group_by}
 }
 \value{
-a list of data and group_by
+a list of data and group_by (factor)
 }
 \description{
 Subset Data and Group
+}
+\examples{
+
 }

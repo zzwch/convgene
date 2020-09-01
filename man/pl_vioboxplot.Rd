@@ -32,3 +32,6 @@ a ggplot object
 \description{
 Voinlin and Boxplot in one plot
 }
+\examples{
+
+}

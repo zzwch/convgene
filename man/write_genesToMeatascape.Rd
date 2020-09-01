@@ -21,3 +21,6 @@ write_genesToMeatascape(genes, group_by, txt_file, top_n = NULL)
 \description{
 a helper function to write files for metascape analysis.
 }
+\examples{
+
+}

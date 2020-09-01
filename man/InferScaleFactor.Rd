@@ -19,3 +19,6 @@ InferScaleFactor(x, log_base = base::exp(1), pseudo_count = 1)
 \description{
 Infer the scale factor used for normalization
 }
+\examples{
+
+}

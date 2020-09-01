@@ -44,3 +44,6 @@ a ggplot object
 \description{
 Enhanced DimPlot of Seurat v3
 }
+\examples{
+
+}

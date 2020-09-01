@@ -33,15 +33,15 @@ pl_averageHeatmap(
 
 \item{groups}{only these selected groups to be visualized}
 
-\item{method}{using `base::mean` or `stats::median` or your custom function for each feature vector;}
+\item{method}{using base::mean or stats::median or your custom function for each feature vector;}
 
-\item{by_log}{calculate by log scale ; If `TRUE` log_base will be ignored.}
+\item{by_log}{calculate by log scale ; If TRUE log_base will be ignored.}
 
-\item{log_base}{`base::exp(1)` or `2` or other else, depends on your normalization method.}
+\item{log_base}{base::exp(1) or 2 or other else, depends on your normalization method.}
 
 \item{exclude_zero}{exclude zeros when calculate average/median feature value. Note exclude_zero first, outlier_cutoff second.}
 
-\item{outlier_cutoff}{sometimes outliers (several extremely high cells) should be excluded when do summarise. Set `0.99` to exclude top 1% cells. (default: 1)}
+\item{outlier_cutoff}{sometimes outliers (several extremely high cells) should be excluded when do summarise. Set 0.99 to exclude top 1 percent cells. (default: 1)}
 
 \item{heat_color}{heatmap colors}
 
@@ -64,4 +64,7 @@ a pheatmap object
 }
 \description{
 Heatmap of average expression of select features
+}
+\examples{
+
 }

@@ -18,17 +18,20 @@ pp_centerData(
 
 \item{group_by}{a vector including cell annotations}
 
-\item{by_log}{calculate in log scale or in normalized scale; If `TRUE` log_base will be ignored.}
+\item{by_log}{calculate in log scale or in normalized scale; If TRUE log_base will be ignored.}
 
-\item{log_base}{`base::exp(1)` or `2` or other else, depends on your normalization method.}
+\item{log_base}{base::exp(1) or 2 or other else, depends on your normalization method.}
 
-\item{center}{a logical value used in `base::scale``}
+\item{center}{a logical value used in base::scale}
 
-\item{scale}{a logical value used in `base::scale``}
+\item{scale}{a logical value used in base::scale}
 }
 \value{
 scaled data
 }
 \description{
 Scale data in each group
+}
+\examples{
+
 }

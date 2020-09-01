@@ -21,7 +21,7 @@ pl_tableHeatmap(
 
 \item{n}{length of gradient colors}
 
-\item{min}{less than `min` will be setted to `NA`}
+\item{min}{less than min will be setted to NA}
 
 \item{title}{plot title}
 
@@ -34,4 +34,7 @@ a ggplot object
 }
 \description{
 Heatmap of a 2D-table
+}
+\examples{
+
 }

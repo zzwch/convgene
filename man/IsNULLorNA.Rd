@@ -15,3 +15,6 @@ a logical value
 \description{
 return TRUE if x is NULL or then NULL
 }
+\examples{
+
+}
