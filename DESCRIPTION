@@ -23,10 +23,10 @@ Suggests:
     rmarkdown
 VignetteBuilder: knitr
 Collate: 
+    'data.R'
     'utils.R'
     'pl.R'
     'pp.R'
-    'str_to.R'
     'tl.R'
 Depends: 
     R (>= 2.10)

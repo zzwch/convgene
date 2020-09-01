@@ -2,15 +2,16 @@
 #'
 #' @param data expression matrix of feature by cell, ususally normalized (in log scale) but not feature scaled.
 #' @param group_by a vector including cell annotations
-#' @param by_log calculate in log scale or in normalized scale; If `TRUE` log_base will be ignored.
-#' @param log_base `base::exp(1)` or `2` or other else, depends on your normalization method.
-#' @param center a logical value used in `base::scale``
-#' @param scale a logical value used in `base::scale``
+#' @param by_log calculate in log scale or in normalized scale; If TRUE log_base will be ignored.
+#' @param log_base base::exp(1) or 2 or other else, depends on your normalization method.
+#' @param center a logical value used in base::scale
+#' @param scale a logical value used in base::scale
 #'
 #' @return scaled data
 #' @export
 #'
 #' @examples
+#'
 pp_centerData <- function(
   data,
   group_by = NULL,
@@ -51,6 +52,7 @@ pp_centerData <- function(
 #' @export
 #'
 #' @examples
+#'
 pp_runHarmony <- function(object, dims.use, group.by.vars,...){
   embedding <- Seurat::Embeddings(object)[,dims.use]
   harmonyEmbed <- harmony::HarmonyMatrix(embedding, object@meta.data, group.by.vars,
@@ -83,6 +85,7 @@ pp_runHarmony <- function(object, dims.use, group.by.vars,...){
 #' @export
 #'
 #' @examples
+#'
 pp_findVariableFeatures <- function(object, split_by = "ident", groups = NULL, nfeatures = 2000, assay = "RNA", log_var = F, ...){
   object_list <- Seurat::SplitObject(object, split_by)
   if(!is.null(groups)) object_list <- object_list[groups]
