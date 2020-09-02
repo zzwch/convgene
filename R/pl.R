@@ -18,6 +18,7 @@ NULL
 #' @param color heatmap colors
 #' @param permutation_by permutate and order the cells
 #' @param seed permutation seed
+#' @param smooth_n smooth the expression over smooth_n cells
 #' @param do_scale scale data
 #' @param cap_max capping the maximum of data
 #' @param cap_min capping the minimum of data
@@ -33,7 +34,7 @@ pl_heatmap <- function(
   data, features = NULL, color = gradient_colors$f_BuWtRd(99, interpolate = "linear"),
   meta_data = NA, annot_col = NA,
   permutation_by = NA, seed = 666,
-  feature_data = NA, annot_row = NA,
+  feature_data = NA, annot_row = NA, smooth_n = NA,
   do_scale = F, cap_max = NA, cap_min = NA,
   annot_colors = NA, ...){
 
@@ -62,6 +63,7 @@ pl_heatmap <- function(
   }
 
   phData <- data[features, rownames(meta_data)]
+  if(!IsNULLorNA(smooth_n)) phData <- rowSmooth(phData, smooth_n)
   if(do_scale) phData <- Matrix::t(scale(Matrix::t(phData)))
   phData <- Seurat::MinMax(phData, min = cap_min, max = cap_max)
   pheatmap(mat = phData,

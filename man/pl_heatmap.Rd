@@ -14,6 +14,7 @@ pl_heatmap(
   seed = 666,
   feature_data = NA,
   annot_row = NA,
+  smooth_n = NA,
   do_scale = F,
   cap_max = NA,
   cap_min = NA,
@@ -39,6 +40,8 @@ pl_heatmap(
 \item{feature_data}{feature annotation data frame}
 
 \item{annot_row}{select colnames of feature_data}
+
+\item{smooth_n}{smooth the expression over smooth_n cells}
 
 \item{do_scale}{scale data}
 

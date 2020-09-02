@@ -482,3 +482,50 @@ readRda <- function(file, verbose = F){
   names <- base::load(file, verbose = verbose)
   return(base::mget(names))
 }
+
+
+#' smooth each row of matrix
+#'
+#' @param mat matrix
+#' @param n smooth over n columns
+#' @param proportion smooth over proportion*ncol(mat)
+#' @param do.scale scale mat after being smoothed
+#'
+#' @return matrix
+#' @export
+#'
+#' @examples
+#'
+rowSmooth <- function(mat, n = NULL, proportion = 0.2, do.scale = F){
+  if(is.null(n)){
+    n <- ceiling(ncol(mat) * proportion)
+  }
+  if(n == 1) stop("nothing should be smoothed!")
+  res <- mat
+  for(i in 1:nrow(mat)){
+    res[i,] <- vectorSmooth(as.numeric(mat[i,,drop = T]), n)
+  }
+
+  if(do.scale){
+    res <- t(scale(t(res)))
+  }
+  return(res)
+}
+
+#' smooth a vector
+#'
+#' @param x a vector
+#' @param n smooth over n items
+#'
+#' @return vector
+#' @export
+#'
+#' @examples
+#'
+vectorSmooth <- function(x, n){
+  sapply(1:length(x), function(i){
+    m <- 1:n + i - ceiling(n/2)
+    m <- m[m > 0 & m <= length(x)]
+    mean(x[m])
+  })
+}

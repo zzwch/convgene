@@ -63,7 +63,7 @@ tl_calcSimilarity <- function(
   }
 
 
-  distData <- dist_fun(data, metric, ...)
+  distData <- as.matrix(dist_fun(data, metric, ...))
   if(transform_to_similarity){
     distData <- transform_method(distData)
   }
@@ -76,15 +76,16 @@ tl_calcSimilarity <- function(
   if(!is.factor(group_by)){
     group_by <- factor(group_by, sort(unique(group_by)))
   }
-  if(!is.factor(subset_by)){
-    subset_by <- factor(subset_by, sort(unique(subset_by)))
-  }
+
 
   if(IsNULLorNA(subset_by)){
-    as.data.frame(t(sapply(levels(group_by), function(x){
+    simData <- as.data.frame(t(sapply(levels(group_by), function(x){
       c(getBothSimilarity(distData, group_by == x, group_by != x), group = x)
     })))
   }else{
+    if(!is.factor(subset_by)){
+      subset_by <- factor(subset_by, sort(unique(subset_by)))
+    }
     simData <- as.data.frame(t(
       do.call(cbind, lapply(
         levels(group_by),
