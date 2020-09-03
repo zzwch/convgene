@@ -36,7 +36,8 @@ pl_heatmap <- function(
   permutation_by = NA, seed = 666,
   feature_data = NA, annot_row = NA, smooth_n = NA,
   do_scale = F, cap_max = NA, cap_min = NA,
-  annot_colors = NA, ...){
+  annot_colors = NA,
+  ...){
 
   if(IsNULLorNA(features)){
     features <- rownames(data)
@@ -63,8 +64,8 @@ pl_heatmap <- function(
   }
 
   phData <- data[features, rownames(meta_data)]
-  if(!IsNULLorNA(smooth_n)) phData <- rowSmooth(phData, smooth_n)
   if(do_scale) phData <- Matrix::t(scale(Matrix::t(phData)))
+  if(!IsNULLorNA(smooth_n)) phData <- rowSmooth(phData, smooth_n)
   phData <- Seurat::MinMax(phData, min = cap_min, max = cap_max)
   pheatmap(mat = phData,
            color = color,

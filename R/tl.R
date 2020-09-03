@@ -3,6 +3,154 @@
 NULL
 
 
+#' a robust PCA for Seurat
+#'
+#' Based on a pre-computed dimensional reduction (typically calculated on a subset of genes and projects this onto the entire dataset (all genes).
+#' Then generate a new rPCA reduction.
+#'
+#' @param object Seurat3 object
+#' @param slot use which data to calc rpca
+#' @param assay use which assay. NULL to use DefaultAssay(object)
+#' @param reduction use which reduction to obtain top features.
+#' @param do.score.scale scale robust scores
+#' @param topn robust top n genes of loadings
+#' @param reduction.name new reduction name
+#' @param use_all_genes get top n genes from all genes loadings, not just typically highly variable genes. This will call ProjectDim if inexist.
+#'
+#' @return updated Seurat3 object with a new pca_score reduction added
+#' @import Seurat
+#' @export
+#'
+#' @examples
+#'
+tl_RunPCAScore <- function(
+  object, slot = "data", assay = NULL,
+  reduction = "pca",
+  use_all_genes = T,
+  topn = 30,
+  do.score.scale = T,
+  reduction.name = "rpca"){
+
+  data <- GetAssayData(object, slot = slot, assay = assay)
+  # SetDimReduction(object, "pca_score", "loadingData", object@dr$pca@loadingData)
+  # SetDimReduction(object, "pca_score", "loadingData.full", object@dr$pca@loadingData.full)
+
+  loadingData <- Loadings(epc, reduction = reduction, projected = use_all_genes)
+  if(min(dim(loadingData)) == 0){
+    if(use_all_genes){
+      object <- ProjectDim(object, reduction = reduction, assay = assay, do.center = T)
+    }else{
+      stop("Please RunPCA first. You may also run ProjectDim thereafter.")
+    }
+  }
+
+  object@reductions[[reduction.name]] <- object@reductions[[reduction]]
+
+  pcaEmbedData <- Embeddings(object, reduction)
+  reduction.key <- Key(object)[[reduction]]
+  rpcaEmbedData <- matrix(0, nrow = nrow(pcaEmbedData), ncol = 4*ncol(pcaEmbedData))
+  rownames(rpcaEmbedData) <- rownames(pcaEmbedData)
+  colnames(rpcaEmbedData) <- paste0(rep(paste0(reduction.key, 1:ncol(pcaEmbedData)), each = 4), c("", ".pos",".neg",".score"))
+  rpcaEmbedData[,colnames(pcaEmbedData)] <- pcaEmbedData
+  for(i in colnames(loadingData)){
+    features.pos <- names(sort(loadingData[,i], decreasing = T)[1:topn])
+    features.neg <- names(sort(loadingData[,i], decreasing = F)[1:topn])
+    features.use <- c(features.pos, features.neg)
+    data.scale = data[features.use, ] / apply(data[features.use, ], 1, max)
+
+    score.data <- data.frame(neg = colSums(data.scale[features.neg, ]),
+                             pos = colSums(data.scale[features.pos, ]))
+    rownames(score.data) <- colnames(data.scale)
+    if(do.score.scale){
+      score.data$pos <- score.data$pos / max(score.data$pos)
+      score.data$neg <- score.data$neg / max(score.data$neg)
+    }
+    rpcaEmbedData[,paste0(i,  c(".pos",".neg",".score"))] <- as.matrix(cbind(score.data, score.data$pos - score.data$neg))
+  }
+
+  object@reductions[[reduction.name]]@cell.embeddings <- rpcaEmbedData
+
+  return(object)
+}
+
+
+
+#' clac DEGs among multiple groups
+#'
+#' @param data feature by cell matrix
+#' @param group_by a vector of cell annotations
+#' @param groups subset cells belonging to these groups
+#' @param features features to calc
+#' @param multi_test function to test across multiple groups
+#' @param do_pairwise do pairwised test
+#' @param pairs a list of pairs to test, NULL for all pairs
+#' @param pairwise_test function to test two groups included in pairs.
+#' @param ... ohter params passed to pairwise_test.
+#' @param p_adjust adjust p value
+#'
+#' @return a data.frame of gene and pvalues
+#' @export
+#'
+#' @examples
+#'
+tl_PairwiseDEGs <- function(
+  data, group_by, groups = NULL,
+  features = NULL, p_adjust = T,
+  multi_test = kruskal.test,
+  do_pairwise = F,
+  pairs = NULL,
+  pairwise_test = wilcox.test,
+  ...
+  ){
+
+  if(IsNULLorNA(features)) features <- rownames(data)
+
+  ret <- SubsetDataAndGroup(data[features,], group_by, groups)
+  data <- ret$data; group_by <- ret$group_by
+
+  message("running multi_test")
+  multiDEGs <- data.frame(
+    row.names = features,
+    gene = features,
+    multi_pval = apply(data, 1, function(x) {
+      multi_test(x, group_by)$p.value
+      }))
+
+  if(p_adjust) multiDEGs[['multi_pval_adj']] <- stats::p.adjust(multiDEGs[['multi_pval']])
+
+  message("running pairwise_test")
+  if(do_pairwise){
+    if(IsNULLorNA(groups)) groups <- sort(unique(group_by))
+    groups <- as.character(groups)
+    if(IsNULLorNA(pairs)) {
+      pairs <- utils::combn(groups, 2, simplify = F)
+    }
+
+    for(pair in pairs){
+      pair_prefix <- paste0(pair[1],"vs", pair[2])
+      message("running pairwise_test ", pair_prefix)
+      # pval
+      multiDEGs[[paste0(pair_prefix, "_pval")]] <- apply(data, 1, function(x) {
+        pairwise_test(x[group_by == pair[1]],
+                      x[group_by == pair[2]], ...)$p.value
+      })
+      # Fold change
+      multiDEGs[[paste0(pair_prefix, "_logFC")]] <- apply(data, 1, function(x) {
+        ExpMean(x[group_by == pair[1]]) - ExpMean(x[group_by == pair[2]])
+      })
+      # adjust
+      if(p_adjust) multiDEGs[[paste0(pair_prefix, "_pval_adj")]] <- stats::p.adjust(multiDEGs[[paste0(pair_prefix, "_pval")]])
+    }
+  }
+
+  # reorder columns
+  pairs_prefix <- sapply(pairs, function(x) {paste(x, collapse = "vs")})
+  columns_order <- c("gene","multi_pval", paste0(pairs_prefix, "_pval"), paste0(pairs_prefix, "_logFC"))
+  if(p_adjust) columns_order <- c(columns_order, paste0(pairs_prefix, "_pval_adj"), "multi_pval_adj")
+
+  return(multiDEGs[,columns_order])
+}
+
 #' calculate inter-similarity or intra-similarity of clusters
 #'
 #'
@@ -12,7 +160,7 @@ NULL
 #' @param dist_fun function to calculate distance/similarity. see Details.
 #' @param metric metric passed to dist_fun
 #' @param ... ohter params passed to dist_fun
-#' @param transform_to_similarity
+#' @param transform_to_similarity from dist to similarity
 #' @param transform_method dist to similarity function, see Details
 #' @param subset_by if setted, calc intra-/inter-similarity of groups restricted to each subset
 #' @param subsets only consider cells belonging to these subsets

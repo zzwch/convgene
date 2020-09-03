@@ -529,3 +529,41 @@ vectorSmooth <- function(x, n){
     mean(x[m])
   })
 }
+
+#' drop unused colors
+#'
+#' This may be usefull for annotation_colors in pheatmap or pl_heatmap
+#'
+#' @param colors a named list of color vectors
+#' @param df data.frame to check
+#' @param drop_col drop which color. NULL is all.
+#'
+#' @return a list of updated colors
+#' @export
+#'
+#' @examples
+#'
+dropColors <- function(colors, df, drop_col = NULL){
+  sapply(names(colors), function(x) {
+    if(x %in% colnames(df)){
+      col_ind <- names(colors[[x]]) %in% df[[x]]
+      colors[[x]][col_ind]
+    }else{
+      colors[[x]]
+    }
+  }, simplify = F)
+}
+
+#' convert a color name to RGB character
+#'
+#' @param col color name
+#' @param alpha transparent, 0 to 255
+#'
+#' @return a character
+#' @export
+#'
+#' @examples
+#'
+color2RGB <- function(col, alpha = 255){
+  grDevices::rgb(t(grDevices::col2rgb(col)), maxColorValue = 255, alpha = alpha)
+}

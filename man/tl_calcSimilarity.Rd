@@ -35,6 +35,8 @@ tl_calcSimilarity(
 
 \item{metric}{metric passed to dist_fun}
 
+\item{transform_to_similarity}{from dist to similarity}
+
 \item{transform_method}{dist to similarity function, see Details}
 
 \item{...}{ohter params passed to dist_fun}
