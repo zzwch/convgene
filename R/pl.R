@@ -119,12 +119,13 @@ pl_slingshot <- function(object, ggplot, color_by = "ss_lineage", pt.size = 1){
 #' @param show_points show geom_point
 #' @param show_ellipse show stat_ellipse
 #' @param ellipse_level set ellipse area level
+#' @param ellipse_alpha ellipse aes, a value of 0 to 1
+#' @param ellipse_color ellipse aes, a color
 #' @param show_center show mean point
 #' @param center_method function used to calc mean center
 #' @param colors modify the point colors
 #' @param shape_by point aes, a value or colname of meta_data
 #' @param size_by point aes, a value or colname of meta_data
-#' @param ellipse_alpha ellipse aes, a value of 0 to 1
 #' @param center_size center point aes, a value
 #' @param center_shape center point aes, a value
 #' @param center_alpha center point aes, a value
@@ -141,7 +142,7 @@ pl_scatterplot <- function(
   group_by = NULL,
   groups = NULL,
   show_points = T, shape_by = NULL, size_by = NULL,
-  show_ellipse = F, ellipse_level = 0.5, ellipse_alpha = 0.8,
+  show_ellipse = F, ellipse_level = 0.5, ellipse_alpha = 0.8, ellipse_color = "white",
   show_center = F, center_method = SummariseExpr,
   center_size = 3, center_shape = 1, center_alpha = 1,
   colors = scanpy_colors$default_64, ...){
@@ -185,9 +186,10 @@ pl_scatterplot <- function(
   if(show_ellipse){
     p <- p + stat_ellipse(mapping = aes_(x = as.name(x),
                                         y = as.name(y),
-                                        color = as.name(group_by),
+                                        fill = as.name(group_by),
                                         group = as.name(group_by)),
-                          fill = NA, size = 1,
+                          color = ellipse_color,
+                          size = 1,
                           geom = "polygon",
                           level = ellipse_level,
                           alpha = ellipse_alpha)
@@ -212,7 +214,9 @@ pl_scatterplot <- function(
   }
 
   if(!IsNULLorNA(colors)){
-    p <- p + scale_color_manual(values = colors, na.value = "grey70")
+    p <- p +
+      scale_color_manual(values = colors, na.value = "grey70") +
+      scale_fill_manual(values = colors, na.value = "grey70")
   }
   return(p)
 }

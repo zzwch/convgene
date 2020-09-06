@@ -288,6 +288,69 @@ SummariseExpr <- function(
   }
 }
 
+#' Check Function
+#'
+#' @param x a vector
+#' @param strict if strict, duplicated x will result in stop.
+#'
+#' @return deduplicated x
+#' @export
+#'
+#' @examples
+#'
+CheckDuplicate <- function(x, strict = T, rm_dup = T){
+  if(anyDuplicated(x)){
+    if(strict){
+      stop("there are duplicated elements in the vector")
+    }
+    warning("there are duplicated elements in the vector")
+    if(rm_dup){
+      return(x[!duplicated(x)])
+    }
+  }
+  return(x)
+}
+
+
+#' Messages with header
+#'
+#' @param header header string
+#' @param messages message vectors
+#' @param ... other params passed to str_c(messages, ...)
+#'
+#' @return string
+#' @export
+#'
+#' @examples
+#'
+HeaderMesseage <- function(header, messages, ...){
+  stringr::str_c(header, stringr::str_c(messages, ...))
+}
+
+
+#' Check Feature Duplicate and Not In Data
+#'
+#' @param object data or seurat3 object
+#' @param features features
+#' @param rm_dup remove duplicated elements
+#' @param rm_notin remove features not in data
+#'
+#' @return updated features
+#' @export
+#'
+#' @examples
+#'
+CheckFeatures <- function(object, features, rm_dup = T, rm_notin = T){
+  features <- CheckDuplicate(features, strict = F, rm_dup = rm_dup)
+  features_ <- setdiff(features, rownames(object))
+  if(length(features_) > 0){
+    HeaderMesseage("NOT-IN-DATA: ",features_, sep = ", ")
+    if(rm_notin){
+      features <- setdiff(features, features_)
+    }
+  }
+  return(features)
+}
 
 #' Check pal in brewer
 #'
@@ -306,6 +369,21 @@ CheckBrewerPal <- function(pal = "YlGn", n = 5){
     colours <- grDevices::colorRampPalette(pal)(n)
   }
   return(colours)
+}
+
+
+#' Correct sign by correlation
+#'
+#' @param x a vector to be corrected
+#' @param y a vector as reference with equal length of x
+#'
+#' @return corrected x
+#' @export
+#'
+#' @examples
+#'
+SignCorrectionByCor <- function(x, y){
+  if(cor(x, y ) < 0) return(-x) else return(x)
 }
 
 #' a helper function to write files for metascape analysis.
@@ -333,6 +411,39 @@ write_genesToMeatascape <- function(genes, group_by, txt_file, top_n = NULL){
     writeLines(text = txtLine, con = txtfile)
   }
   close(txtfile)
+}
+
+
+#' write GSEA files
+#'
+#'
+#' @param data feature by cell matrix
+#' @param group_by cell annotations
+#' @param groups subset groups
+#' @param file_prefix gsea file prefix
+#' @param add.sys.time add time tag to gsea file name
+#'
+#' @return produce two files of .txt and .cls
+#' @export
+#'
+#' @examples
+#'
+write_dataToJavaGSEA <- function(data, group_by, groups = NULL, file_prefix = "gsea", add.sys.time = T){
+  ret <- SubsetDataAndGroup(data, group_by, groups)
+  data <- ret$data; group_by <- ret$group_by
+
+  time_suffix <- ifelse(add.sys.time, base::Sys.time(), "")
+
+  gsea_data <- cbind(rownames(data), NA, as.matrix(data))
+  colnames(gsea_data)[1:2] <- c("Name", "Description")
+  utils::write.table(gsea_data,
+                     file = paste(file_prefix, time_suffix, "txt",sep = "."),
+                     quote = F, sep = "\t", row.names = F)
+
+  file_cluster <- paste(file_prefix, "clsuter", time_suffix, "cls",sep = ".")
+  write(paste(length(group_by), length(unique(group_by)), 1, sep = " "), file = file_cluster)
+  write(paste("#", paste(unique(group_by), collapse = " "), sep = " "), file = file_cluster, append = T)
+  write(paste(group_by, collapse = " "), file = file_cluster, append = T)
 }
 
 #' Infer the scale factor used for normalization

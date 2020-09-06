@@ -3,6 +3,47 @@
 NULL
 
 
+#' Gene Set Scores
+#'
+#' @param object Seurat3 object
+#' @param genesets a list of one or more sets of features
+#' @param method supported methods. It turns the sparse matrix into dense matrix for methods in GSVA.
+#' @param ... other params passed to corresponding method
+#'
+#' @return a list of vectors of score values
+#' @export
+#'
+#' @examples
+#'
+tl_GeneSetScore <- function(
+  object, genesets,
+  method = c("pca", "moduleScore", "gsva", "ssgsea", "zscore", "plage"),
+  ...){
+
+  genesets <- sapply(genesets, function(features) {
+    CheckFeatures(object, features, T, T)
+  }, simplify = F)
+
+  if(method == "pca"){
+    return(
+      sapply(genesets, function(features) {
+        object_tmp <- Seurat::RunPCA(object, features = features, ... )
+        features_means <- Matrix::colMeans(GetAssayData(object_tmp)[features,])
+        return(apply(Embeddings(object_tmp), 2, SignCorrectionByCor, y = features_means))
+      }, simplify = F)
+    )
+  }
+
+  if(method == "moduleScore"){
+    object_tmp <- Seurat::AddModuleScore(object, features = genesets, name = "ModuleScore", ... )
+    return(object_tmp@meta.data[,grepl("ModuleScore", colnames(object_tmp@meta.data))])
+  }
+
+  if(method %in% c( "gsva", "ssgsea", "zscore", "plage")){
+    return(GSVA::gsva(as.matrix(GetAssayData(object)), genesets, method = method, ...))
+  }
+}
+
 #' a robust PCA for Seurat
 #'
 #' Based on a pre-computed dimensional reduction (typically calculated on a subset of genes and projects this onto the entire dataset (all genes).
@@ -39,6 +80,7 @@ tl_RunPCAScore <- function(
   if(min(dim(loadingData)) == 0){
     if(use_all_genes){
       object <- ProjectDim(object, reduction = reduction, assay = assay, do.center = T)
+      loadingData <- Loadings(object, reduction = reduction, projected = use_all_genes)
     }else{
       stop("Please RunPCA first. You may also run ProjectDim thereafter.")
     }
@@ -58,8 +100,8 @@ tl_RunPCAScore <- function(
     features.use <- c(features.pos, features.neg)
     data.scale = data[features.use, ] / apply(data[features.use, ], 1, max)
 
-    score.data <- data.frame(neg = colSums(data.scale[features.neg, ]),
-                             pos = colSums(data.scale[features.pos, ]))
+    score.data <- data.frame(neg = Matrix::colSums(data.scale[features.neg, ]),
+                             pos = Matrix::colSums(data.scale[features.pos, ]))
     rownames(score.data) <- colnames(data.scale)
     if(do.score.scale){
       score.data$pos <- score.data$pos / max(score.data$pos)
@@ -118,8 +160,9 @@ tl_PairwiseDEGs <- function(
 
   if(p_adjust) multiDEGs[['multi_pval_adj']] <- stats::p.adjust(multiDEGs[['multi_pval']])
 
-  message("running pairwise_test")
   if(do_pairwise){
+    message("running pairwise_test")
+
     if(IsNULLorNA(groups)) groups <- sort(unique(group_by))
     groups <- as.character(groups)
     if(IsNULLorNA(pairs)) {
@@ -145,8 +188,14 @@ tl_PairwiseDEGs <- function(
 
   # reorder columns
   pairs_prefix <- sapply(pairs, function(x) {paste(x, collapse = "vs")})
-  columns_order <- c("gene","multi_pval", paste0(pairs_prefix, "_pval"), paste0(pairs_prefix, "_logFC"))
-  if(p_adjust) columns_order <- c(columns_order, paste0(pairs_prefix, "_pval_adj"), "multi_pval_adj")
+  columns_order <- c("gene","multi_pval")
+  if(do_pairwise) columns_order <- c(columns_order, paste0(pairs_prefix, "_pval"), paste0(pairs_prefix, "_logFC"))
+  if(p_adjust) {
+    if(do_pairwise){
+      columns_order <- c(columns_order, paste0(pairs_prefix, "_pval_adj"))
+    }
+    columns_order <- c(columns_order, "multi_pval_adj")
+  }
 
   return(multiDEGs[,columns_order])
 }
@@ -264,8 +313,8 @@ tl_RunSlingshot <- function(
   start.clus, shrink = 0.75, ...){
 
   clusters <- object@meta.data[,group_by,drop = T]
-  sds <- slingshot::slingshot(data = Seurat::Embeddings(object, reduction = "umap"),
-                   clusterLabels = clusters, shrink = 0.75,
+  sds <- slingshot::slingshot(data = Seurat::Embeddings(object, reduction = reduction),
+                   clusterLabels = clusters, shrink = shrink,
                    start.clus = start.clus #, end.clus = c("EP5", "EP7")
                    )
   sds_lineages <- slingshot::slingLineages(sds)

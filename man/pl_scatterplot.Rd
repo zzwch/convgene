@@ -16,6 +16,7 @@ pl_scatterplot(
   show_ellipse = F,
   ellipse_level = 0.5,
   ellipse_alpha = 0.8,
+  ellipse_color = "white",
   show_center = F,
   center_method = SummariseExpr,
   center_size = 3,
@@ -47,6 +48,8 @@ pl_scatterplot(
 \item{ellipse_level}{set ellipse area level}
 
 \item{ellipse_alpha}{ellipse aes, a value of 0 to 1}
+
+\item{ellipse_color}{ellipse aes, a color}
 
 \item{show_center}{show mean point}
 
