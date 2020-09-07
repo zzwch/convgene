@@ -575,11 +575,13 @@ pl_dimplot <- function(object, group_by, ncol = 2, slot = "data",
   ggData <- reshape2::melt(cbind(Seurat::FetchData(object, group_by, slot = slot), embeddings),
                            id.vars = dims,
                            measure.vars = group_by,
-                           variable.name = "group_by", value.name = "value")
+                           variable.name = "group_by",
+                           value.name = "value")
   ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, group_by, slot = slot), embeddings)[subset_cells,],
                             id.vars = dims,
                             measure.vars = group_by,
-                            variable.name = "group_by", value.name = "value")
+                            variable.name = "group_by",
+                            value.name = "value")
 
   if(!is.null(subset_cells)){
     p <- ggplot() +
@@ -594,8 +596,13 @@ pl_dimplot <- function(object, group_by, ncol = 2, slot = "data",
     p <- p + facet_wrap(~group_by, ncol = ncol)
   }
 
-  if(!is.null(cols)) p <- p + scale_color_manual(values = cols)
-
+  if(!is.null(cols)) {
+    if(group_by %in% colnames(object@meta.data)){
+      p <- p + scale_color_manual(values = cols)
+    }else{
+      p <- p + scale_color_gradientn(colors = cols)
+    }
+  }
 
   p <- p + guides(color = guide_legend(override.aes = list(size = 3*pt.size))) +
     theme_classic() +
