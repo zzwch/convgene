@@ -8,6 +8,7 @@ pl_dimplot(
   object,
   group_by,
   ncol = 2,
+  slot = "data",
   subset_by = NULL,
   subset_groups = NULL,
   subset_cells = NULL,

@@ -312,21 +312,6 @@ CheckDuplicate <- function(x, strict = T, rm_dup = T){
 }
 
 
-#' Messages with header
-#'
-#' @param header header string
-#' @param messages message vectors
-#' @param ... other params passed to str_c(messages, ...)
-#'
-#' @return string
-#' @export
-#'
-#' @examples
-#'
-HeaderMesseage <- function(header, messages, ...){
-  stringr::str_c(header, stringr::str_c(messages, ...))
-}
-
 
 #' Check Feature Duplicate and Not In Data
 #'
@@ -344,9 +329,9 @@ CheckFeatures <- function(object, features, rm_dup = T, rm_notin = T){
   features <- CheckDuplicate(features, strict = F, rm_dup = rm_dup)
   features_ <- setdiff(features, rownames(object))
   if(length(features_) > 0){
-    HeaderMesseage("NOT-IN-DATA: ",features_, sep = ", ")
+    Message("NOT-IN-DATA: ",features_, ", ")
     if(rm_notin){
-      features <- setdiff(features, features_)
+      features <- features[!features %in% features_]
     }
   }
   return(features)

@@ -542,6 +542,7 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
 #'
 #' @param object Seurat object
 #' @param group_by Name of one or more metadata columns to group (color) cells by (for example, orig.ident); pass 'ident' to group by identity class
+#' You can also plot features with gradient cols.
 #' @param ncol Number of columns for display when faceting plots
 #' @param subset_by enhanced option, subset cells by the colname.
 #' @param subset_groups enhanced option, subset cells of these categories.
@@ -550,13 +551,14 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
 #' @param dims Dimensions to plot, must be a two-length numeric vector specifying x- and y-dimensions
 #' @param pt.size Adjust point size for plotting
 #' @param cols Vector of colors, each color corresponds to an identity class.
+#' @param slot FetchData of features from which slot.
 #'
 #' @return a ggplot object
 #' @export
 #'
 #' @examples
 #'
-pl_dimplot <- function(object, group_by, ncol = 2,
+pl_dimplot <- function(object, group_by, ncol = 2, slot = "data",
                       subset_by = NULL, subset_groups = NULL, subset_cells = NULL,
                       reduction = "umap", dims = c(1,2), pt.size = 1,
                       cols = scanpy_colors$default_64){
@@ -570,11 +572,11 @@ pl_dimplot <- function(object, group_by, ncol = 2,
   embeddings <- Embeddings(object, reduction = reduction)[,dims]
   dims <- colnames(embeddings)
 
-  ggData <- reshape2::melt(cbind(object@meta.data[,group_by,drop = F], embeddings),
+  ggData <- reshape2::melt(cbind(Seurat::FetchData(object, group_by, slot = slot), embeddings),
                            id.vars = dims,
                            measure.vars = group_by,
                            variable.name = "group_by", value.name = "value")
-  ggData2 <- reshape2::melt(cbind(object@meta.data[,group_by,drop = F], embeddings)[subset_cells,],
+  ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, group_by, slot = slot), embeddings)[subset_cells,],
                             id.vars = dims,
                             measure.vars = group_by,
                             variable.name = "group_by", value.name = "value")
