@@ -76,7 +76,7 @@ tl_RunPCAScore <- function(
   # SetDimReduction(object, "pca_score", "loadingData", object@dr$pca@loadingData)
   # SetDimReduction(object, "pca_score", "loadingData.full", object@dr$pca@loadingData.full)
 
-  loadingData <- Loadings(epc, reduction = reduction, projected = use_all_genes)
+  loadingData <- Loadings(object, reduction = reduction, projected = use_all_genes)
   if(min(dim(loadingData)) == 0){
     if(use_all_genes){
       object <- ProjectDim(object, reduction = reduction, assay = assay, do.center = T)
@@ -466,7 +466,7 @@ tl_crossTableEnrichment <- function(tab, p.adjust = T,heatmap = T){
     tab.ph <- log10(abs(tab.p)) * sign(tab.p)
     tab.ph[tab.ph < -log10(0.05)] <- NA
     pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F,
-                       color = colorRampPalette(RColorBrewer::brewer.pal(9, "RdYlGn"))(11))
+                       color = colorRampPalette(RColorBrewer::brewer.pal(9, "YlGn"))(11))
   }
   return(tab.p)
 }

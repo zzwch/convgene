@@ -16,9 +16,12 @@ pl_heatmap(
   annot_row = NA,
   smooth_n = NA,
   do_scale = F,
+  smooth_lowess = F,
+  lowess_span = 2/3,
   cap_max = NA,
   cap_min = NA,
   annot_colors = NA,
+  rownames_to_show = NA,
   ...
 )
 }
@@ -45,11 +48,17 @@ pl_heatmap(
 
 \item{do_scale}{scale data}
 
+\item{smooth_lowess}{smooth using lowess regression}
+
+\item{lowess_span}{lowess span}
+
 \item{cap_max}{capping the maximum of data}
 
 \item{cap_min}{capping the minimum of data}
 
 \item{annot_colors}{a list of annotation colors named with annotation categories}
+
+\item{rownames_to_show}{select rownames to show to the right}
 
 \item{...}{other params passed to pheatmap}
 }

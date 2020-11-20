@@ -7,6 +7,7 @@
 pl_dimplot(
   object,
   group_by,
+  shape_by = NULL,
   ncol = 2,
   slot = "data",
   subset_by = NULL,
@@ -21,9 +22,14 @@ pl_dimplot(
 \arguments{
 \item{object}{Seurat object}
 
-\item{group_by}{Name of one or more metadata columns to group (color) cells by (for example, orig.ident); pass 'ident' to group by identity class}
+\item{group_by}{Name of one or more metadata columns to group (color) cells by (for example, orig.ident); pass 'ident' to group by identity class
+You can also plot features with gradient cols.}
+
+\item{shape_by}{one column name to control point shape}
 
 \item{ncol}{Number of columns for display when faceting plots}
+
+\item{slot}{FetchData of features from which slot.}
 
 \item{subset_by}{enhanced option, subset cells by the colname.}
 

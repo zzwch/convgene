@@ -425,10 +425,31 @@ write_dataToJavaGSEA <- function(data, group_by, groups = NULL, file_prefix = "g
                      file = paste(file_prefix, time_suffix, "txt",sep = "."),
                      quote = F, sep = "\t", row.names = F)
 
-  file_cluster <- paste(file_prefix, "clsuter", time_suffix, "cls",sep = ".")
+  file_cluster <- paste(file_prefix, "cluster", time_suffix, "cls",sep = ".")
   write(paste(length(group_by), length(unique(group_by)), 1, sep = " "), file = file_cluster)
   write(paste("#", paste(unique(group_by), collapse = " "), sep = " "), file = file_cluster, append = T)
   write(paste(group_by, collapse = " "), file = file_cluster, append = T)
+}
+
+#' write SCENIC data for in-house scenic-pureR
+#'
+#' @param object seurat3 object
+#' @param group_by vector of colnames
+#' @param colVars colors vector
+#' @param file save data to this file
+#' @param slot fetch data
+#' @param assay fetch data
+#'
+#' @return a saved file
+#' @export
+#'
+#' @examples
+#'
+write_seuratToScenic <- function(object, group_by, colVars, file, slot = "data", assay = "RNA"){
+  expr <- as.matrix(GetAssayData(object, slot, assay))
+  cellInfo <- object@meta.data[,group_by, drop = F]
+  colVars = colVars
+  save(expr, cellInfo, colVars, file = file)
 }
 
 #' Infer the scale factor used for normalization
@@ -445,6 +466,53 @@ write_dataToJavaGSEA <- function(data, group_by, groups = NULL, file_prefix = "g
 InferScaleFactor <- function(x, log_base = base::exp(1), pseudo_count = 1){
   unique(round(as.matrix(colSums(log_base^x-pseudo_count))))
 }
+
+
+
+#' Infer UMI from scale-factor-normalized data
+#'
+#' Pseudo: the smallest non-zero value (normalized) is corresponding to 1 of UMI.
+#'
+#' @param data scale-factor-normalized data (normalized by column)
+#'
+#' @return a matrix of inferred UMI data
+#' @export
+#'
+#' @examples
+#'
+inferUMI <- function(data, base = exp(1)){
+
+  umi <- apply(data,2, function(x){
+    umi_1 <- min(x[x!=0])
+    round((base^(x)-1)/(base^(umi_1)-1))
+  })
+
+  hist(colSums(umi))
+  return(umi)
+}
+
+
+#' export UMI to each file by each Batch
+#'
+#' this may be used for preparation of files to GEO
+#'
+#' @param umi umi matrix
+#' @param batch a vector for cell batch information
+#'
+#' @return csv files
+#' @export
+#'
+#' @examples
+#'
+exportUMIByBatch <- function(umi, batch){
+  bs <- unique(as.character(batch))
+  for(i in bs){
+    print(i)
+    umi_ <- umi[,batch == i]
+    write.csv(umi_, paste0(i, ".umi.csv"))
+  }
+}
+
 
 ### str_to_gene()
 
@@ -662,4 +730,42 @@ dropColors <- function(colors, df, drop_col = NULL){
 #'
 color2RGB <- function(col, alpha = 255){
   grDevices::rgb(t(grDevices::col2rgb(col)), maxColorValue = 255, alpha = alpha)
+}
+
+
+#' convert a list of vectors with different lenght to data.frame
+#'
+#' @param x a list of vectors
+#'
+#' @return a data.frame
+#' data.frame is easier to view/export to excel
+#' @export
+#'
+#' @examples
+#'
+list2df <- function(x){
+  n.obs <- sapply(x, length)
+  seq.max <- seq_len(max(n.obs))
+  return(as.data.frame(sapply(x, function(x) {
+    if(is.null(x)) x <- NA
+    x[seq.max]
+  })))
+}
+
+
+#' set calculations
+#'
+#' @param x set A
+#' @param y set B
+#'
+#' @return a list of diffs, intersect and union
+#' @export
+#'
+#' @examples
+#'
+setSummary <- function(x, y){
+  list(diff_xy = setdiff(x,y),
+       diff_yx = setdiff(y, x),
+       intersect = intersect(x,y),
+       union = union(x,y))
 }

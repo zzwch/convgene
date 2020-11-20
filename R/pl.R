@@ -23,6 +23,9 @@ NULL
 #' @param cap_max capping the maximum of data
 #' @param cap_min capping the minimum of data
 #' @param ... other params passed to pheatmap
+#' @param smooth_lowess smooth using lowess regression
+#' @param lowess_span lowess span
+#' @param rownames_to_show select rownames to show to the right
 #'
 #' @return a pheatmap
 #' @import pheatmap
@@ -35,8 +38,11 @@ pl_heatmap <- function(
   meta_data = NA, annot_col = NA,
   permutation_by = NA, seed = 666,
   feature_data = NA, annot_row = NA, smooth_n = NA,
-  do_scale = F, cap_max = NA, cap_min = NA,
+  do_scale = F,
+  smooth_lowess = F, lowess_span = 2/3,
+  cap_max = NA, cap_min = NA,
   annot_colors = NA,
+  rownames_to_show = NA,
   ...){
 
   if(IsNULLorNA(features)){
@@ -46,7 +52,7 @@ pl_heatmap <- function(
     if(!IsNULLorNA(permutation_by)) {
       set.seed(seed)
       meta_data <- meta_data[sample(1:nrow(meta_data)),]
-      meta_data <- meta_data[do.call(what = order, list(meta_data[,permutation_by])),]
+      meta_data <- meta_data[do.call(what = order, meta_data[,permutation_by,drop = F]),]
     }
     if(!IsNULLorNA(annot_col)){
       meta_data <- meta_data[, annot_col,drop=F]
@@ -66,12 +72,29 @@ pl_heatmap <- function(
   phData <- data[features, rownames(meta_data)]
   if(do_scale) phData <- Matrix::t(scale(Matrix::t(phData)))
   if(!IsNULLorNA(smooth_n)) phData <- rowSmooth(phData, smooth_n)
+  if(smooth_lowess) {
+    tmp <- t(apply(phData, 1, function(x) stats::lowess(x, f = lowess_span)$y))
+    dimnames(tmp) <- dimnames(phData)
+    phData <- tmp
+  }
+
   phData <- Seurat::MinMax(phData, min = cap_min, max = cap_max)
+
+  phLabels_row <- rownames(phData)
+  if(IsNULLorNA(rownames_to_show)){
+    show_rowname <- F
+  }else{
+    phLabels_row[! phLabels_row %in% rownames_to_show] <- ""
+    show_rowname <- T
+  }
+
   pheatmap(mat = phData,
            color = color,
            annotation_col = meta_data,
            annotation_row = feature_data,
            annotation_colors = annot_colors,
+           show_rownames = show_rowname,
+           labels_row = phLabels_row,
            ...)
 }
 
@@ -351,10 +374,11 @@ pl_vioboxplot <- function(
   box_color = "black",
   box_fill_color = "white"){
 
+  if(class(meta_data) == "Seurat") meta_data <- FetchData(meta_data, vars = c(x, y))
   p <- ggplot(meta_data, mapping = aes_string(x,y)) +
     geom_violin(mapping = aes_string(fill = x),
                 show.legend = F,
-                color= 'white',
+                color= NA,
                 scale = "width") +
     geom_boxplot(color = box_color,
                  show.legend = F,
@@ -552,13 +576,14 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
 #' @param pt.size Adjust point size for plotting
 #' @param cols Vector of colors, each color corresponds to an identity class.
 #' @param slot FetchData of features from which slot.
+#' @param shape_by one column name to control point shape
 #'
 #' @return a ggplot object
 #' @export
 #'
 #' @examples
 #'
-pl_dimplot <- function(object, group_by, ncol = 2, slot = "data",
+pl_dimplot <- function(object, group_by, shape_by = NULL, ncol = 2, slot = "data",
                       subset_by = NULL, subset_groups = NULL, subset_cells = NULL,
                       reduction = "umap", dims = c(1,2), pt.size = 1,
                       cols = scanpy_colors$default_64){
@@ -572,24 +597,31 @@ pl_dimplot <- function(object, group_by, ncol = 2, slot = "data",
   embeddings <- Embeddings(object, reduction = reduction)[,dims]
   dims <- colnames(embeddings)
 
-  ggData <- reshape2::melt(cbind(Seurat::FetchData(object, group_by, slot = slot), embeddings),
-                           id.vars = dims,
+  ggData <- reshape2::melt(cbind(Seurat::FetchData(object, c(group_by, shape_by), slot = slot), embeddings),
+                           id.vars = c(dims, shape_by),
                            measure.vars = group_by,
                            variable.name = "group_by",
                            value.name = "value")
-  ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, group_by, slot = slot), embeddings)[subset_cells,],
-                            id.vars = dims,
+  ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, c(group_by, shape_by), slot = slot), embeddings)[subset_cells,],
+                            id.vars = c(dims, shape_by),
                             measure.vars = group_by,
                             variable.name = "group_by",
                             value.name = "value")
 
   if(!is.null(subset_cells)){
     p <- ggplot() +
-      geom_point(mapping = aes_string(dims[1], dims[2]), color = "grey80", data = ggData, size = pt.size) +
-      geom_point(mapping = aes_string(dims[1], dims[2], color = "value",group = "group_by"), data = ggData2, size = pt.size)
+      geom_point(mapping = aes_string(dims[1], dims[2], shape = shape_by),
+                 color = "grey80", data = ggData, size = pt.size) +
+      geom_point(mapping = aes_string(dims[1], dims[2], shape = shape_by,
+                                      color = "value",group = "group_by"),
+                 data = ggData2, size = pt.size)
   }else{
     p <- ggplot() +
-      geom_point(mapping = aes_string(dims[1], dims[2], color = "value", group = "group_by"), data = ggData, size = pt.size)
+      geom_point(mapping = aes_string(dims[1], dims[2],
+                                      color = "value",
+                                      group = "group_by",
+                                      shape = shape_by),
+                 data = ggData, size = pt.size)
   }
 
   if(length(group_by) > 1){
@@ -612,4 +644,52 @@ pl_dimplot <- function(object, group_by, ncol = 2, slot = "data",
   return(p)
 }
 
+
+#' rastr version of partial FeaturePlot
+#'
+#' @param object seurat object
+#' @param features genes
+#' @param coord_fixed_ratio coord_fixed
+#' @param ncol ncol of cowplot::plot_grid
+#' @param align align of cowplot::plot_grid
+#' @param cols colors of gradientn
+#' @param pt.size point size
+#' @param order sort orders of cells
+#' @param reduction dimension reduction
+#' @param dims dimensions
+#'
+#' @return ggplot
+#' @export
+#'
+#' @examples
+#'
+pl_rastrFeaturePlot <- function(object, features, coord_fixed_ratio = 1, ncol = NULL, align = c("hv"),
+                                cols = c("grey", "yellow", "red"), pt.size = 1, order = T, rasterise = T,
+                                reduction = "umap", dims = c(1,2)){
+  dimension <- Embeddings(object, reduction = reduction)[,dims]
+  xy <- colnames(dimension)
+  ggData <- cbind(dimension, FetchData(object, vars = features)) %>%
+    as.data.frame()
+  features_ <- gsub("-", "____", features)
+  colnames(ggData) <- c(xy, features_)
+
+  cowplot::plot_grid(
+    plotlist = lapply(seq_along(features), function(i){
+      x <- features_[i]
+      ggplot(data = if(order) ggData %>% arrange(.data[[x]]) else ggData ,
+             mapping = aes_string(x = xy[1], y = xy[2], color = x)) +
+        {if(rasterise) ggrastr::rasterise(geom_point(size = pt.size), dpi = 300) else geom_point(size = pt.size)} +
+        scale_color_gradientn(colours = cols) +
+        coord_fixed(ratio = coord_fixed_ratio) +
+        labs(title = features[i]) +
+        guides(color = guide_colorbar(title = NULL)) +
+        theme_classic() +
+        theme(axis.title = element_blank(),
+              axis.ticks = element_blank(),
+              axis.text = element_blank(),
+              axis.line = element_blank(),
+              plot.title = element_text(hjust = 0.5, face = "bold.italic"),
+              panel.border = element_rect(fill = NA, color = "black"))
+    }),ncol = ncol, align = align)
+}
 

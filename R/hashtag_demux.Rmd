@@ -1,0 +1,274 @@
+---
+title: 'Hashtag demultiplex'
+author: "Zongcheng Li"
+date: !r date()
+output:
+  html_document:
+    code_folding: hide
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+params:
+  h5file: h5file
+  seuratfile: seuratfile
+  sample: sample
+  hashtag: hashtag
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message=T, warning=T, 
+                      cache = F, cache.lazy = F,
+                      dev = "png", dpi = 100, fig.width = 10, fig.height = 10)
+```
+
+# parameter
+# change the settings for your situation
+```{r}
+h5file_10x <- params$h5file
+save2seurat <- params$seuratfile
+hto_info <- setNames(params$sample,
+                     params$hashtag)
+```
+
+
+# shoulders of giants
+加载依赖包
+```{r global, message=FALSE, warning=FALSE}
+options(stringsAsFactors = F)
+# rm(list = ls())
+
+library(Seurat)
+library(magrittr)
+
+library(ggplot2)
+library(patchwork)
+
+library(ggExtra)
+library(stringr)
+library(tidyverse)
+
+```
+
+# HTO classification
+读取原始表达矩阵数据
+```{r h5toSeurat}
+h5d <- Read10X_h5(h5file_10x)
+
+# Gene Expression UMI data
+h5 <- CreateSeuratObject(counts = h5d$`Gene Expression`)
+# ncount derived from MT genes
+mtgenes <- grep("MT-", rownames(h5), value = T, ignore.case = T)
+h5$nMT_RNA <- Matrix::colSums(Assays(h5, slot = "RNA")[mtgenes,])
+h5$rMT_RNA <- h5$nMT_RNA/h5$nCount_RNA
+```
+
+## Demultiplex 
+HashTag数据中，每个细胞带有预先标记的HashTag Oligos（HTO）。
+理想情况下，每个细胞应该只能测到一种HTO标签，
+但是实际HTO数据中，并不是那么完美的每个细胞只带有一种oligo序列。
+需要我们先对HTO数据进行Demutiplex分析，推测细胞真正的HTO标签。
+```{r demultiplex}
+# Add HTO data as a new assay independent from RNA
+HTOdata <- h5d$`Antibody Capture`
+rownames(HTOdata) <- dplyr::recode(rownames(HTOdata), !!!hto_info)
+h5[["HTO"]] <- CreateAssayObject(counts = HTOdata[hto_info,])
+
+# Normalize HTO data, here we use centered log-ratio (CLR) transformation
+h5 <- NormalizeData(h5, assay = "HTO", normalization.method = "CLR")
+h5 <- HTODemux(h5, assay = "HTO", positive.quantile = 0.99)
+h5$HTO_maxID <- factor(h5$HTO_maxID, hto_info)
+
+## check classification
+# 可视化每个HTO标签的分布
+# Group cells based on the max HTO signal
+RidgePlot(h5, assay = "HTO", group.by = 'HTO_maxID', #sort = T,
+          features = rownames(h5[["HTO"]]), ncol = 2)
+```
+
+## Cell Numbers
+```{r cell_number, fig.height =9, fig.width=8}
+# Global classification results
+table(h5$HTO_classification.global)
+table(h5$HTO_classification.global)/ncol(h5)
+
+table(h5$HTO_classification.global, h5$HTO_maxID)
+```
+
+```{r fig.height =4, fig.width=5, eval=F}
+FeatureScatter(h5, feature1 = "hto_Brain", feature2 = "hto_Lung", pt.size = 3)
+```
+
+# Visualization of Quality control
+不同大类下，UMI数量分布
+```{r Vln_nUMI_by_doublet, fig.height =4, fig.width=5}
+VlnPlot(h5, features = "nCount_RNA", group.by = "HTO_classification.global",
+        pt.size = 0.1, log = TRUE)
+```
+
+## check doublet and classification
+```{r tSNE_classification, fig.height=4, fig.width=5, eval = T}
+###########
+Idents(h5) <- "HTO_classification.global"
+
+# First, we will remove negative cells from the object - NOT USED!
+#h5.positive <- subset(h5, idents = "Negative", invert = TRUE)
+
+# Calculate a distance matrix using HTO
+hto.dist.mtx <- as.matrix(dist(t(GetAssayData(object = h5, assay = "HTO"))))
+
+# Calculate tSNE embeddings with a distance matrix
+h5 <- RunTSNE(h5, distance.matrix = hto.dist.mtx, perplexity = 100)
+
+# Visualization
+DimPlot(h5, group.by = "HTO_classification.global")
+DimPlot(h5, group.by = "HTO_classification", cells = colnames(h5)[h5$HTO_classification.global == "Singlet"])
+```
+
+热图可视化HTO标签分类
+```{r heatmap_classification, fig.height=4, fig.width=10, eval=T}
+# To increase the efficiency of plotting, you can subsample cells using the num.cells argument
+HTOHeatmap(h5, assay = "HTO", ncells = 1000)
+```
+
+## check MT
+核查线粒体基因的转录本占比情况，推测细胞是否状态良好或可能处于应激状态
+
+MT比例直方图
+```{r hist_MT, fig.height=4, fig.width=6}
+ggplot(data = h5@meta.data) +
+  geom_histogram(mapping = aes(x=rMT_RNA), bins = 1000) +
+  geom_vline(mapping = aes(xintercept = 0.15), linetype = 2, color ="red") +
+  annotate(geom = "text", x = 0.15, y = 100, label = "x = 0.15", hjust = -0.1) +
+  labs(title = "Histogram showing distribution of UMI proportion of MT genes")
+
+```
+
+MT比例直方图，区分不同取材位点
+```{r hist_MT_by_tag, fig.height=4, fig.width=8}
+# 
+ggplot(data = h5@meta.data) +
+  geom_histogram(mapping = aes(x=rMT_RNA, fill = HTO_maxID), bins = 1000) +
+  facet_wrap(~HTO_maxID) +
+  geom_vline(mapping = aes(xintercept = 0.15), linetype = 2, color ="red") +
+  annotate(geom = "text", x = 0.15,y=40, label = "x = 0.15", hjust = -0.1) +
+  labs(title = "Histogram showing distribution of UMI proportion of MT genes")
+```
+
+MT比例 vs nUMI，区分不同取材位点
+
+```{r scatter_MT_nUMI, fig.height=5, fig.width=6}
+# ratio - scatter
+ggplot(data = h5@meta.data) + 
+  geom_point(mapping = aes(x = log10(nCount_RNA + 1),
+                           y = rMT_RNA,
+                           color = HTO_maxID)) +
+  geom_density2d(mapping = aes(x = log10(nCount_RNA + 1),
+                           y =  rMT_RNA),
+                 color = "blue") +
+  geom_vline(mapping = aes(xintercept = log10(5e3+1)),
+             linetype = 2) +
+  # geom_vline(mapping = aes(xintercept = log10(1e6+1)),
+  #            linetype = 2) +
+  #geom_hline(mapping = aes(yintercept = 2000), linetype = 2) +
+  #scale_color_manual(values = batch_color) +
+  #scale_y_continuous(breaks = seq(0,9000, by = 1000))+
+  facet_wrap(~HTO_maxID) +
+  labs(y = "Ratio of UMIs from MT genes",
+       x = "Number of UMIs, log10 scaled",
+       title = str_interp("All sequenced cells \n(n = ${ncol(h5)})")) +
+  theme(legend.position = "bottom")
+```
+
+## nGene and nUMI of sequenced cells
+```{r scatter_nGene_nUMI, fig.width=8, fig.height=4}
+DefaultAssay(h5) <- "RNA"
+
+# sum(h5$nCount_RNA > 5000)
+# sum(h5$nFeature_RNA > 2000)
+# sum(h5$nCount_RNA > 5000 & h5$nFeature_RNA > 2000)
+
+ggplot(data = h5@meta.data) + 
+  geom_point(mapping = aes(x = log10(nCount_RNA + 1),
+                           y = nFeature_RNA,
+                           color = HTO_classification.global)) +
+  geom_density2d(mapping = aes(x = log10(nCount_RNA + 1),
+                           y = nFeature_RNA),
+                 color = "blue") +
+  geom_vline(mapping = aes(xintercept = log10(5e3+1)),
+             linetype = 2) +
+  # geom_vline(mapping = aes(xintercept = log10(1e6+1)),
+  #            linetype = 2) +
+  geom_hline(mapping = aes(yintercept = 2000),
+             linetype = 2) +
+  #scale_color_manual(values = batch_color) +
+  scale_y_continuous(breaks = seq(0,11000, by = 1000))+
+  facet_wrap(~HTO_classification.global) +
+  labs(y = "Number of expressed genes",
+       x = "Number of UMIs, log10 scaled",
+       title = str_interp("All sequenced cells \n(n = ${ncol(h5)})")) +
+  theme(legend.position = "bottom")
+```
+
+
+```{r scatter_nGene_nUMI_1, fig.width=5, fig.height=5}
+# filter cells and genes
+p <- ggplot(data = h5@meta.data) + 
+  geom_point(mapping = aes(x = log10(nCount_RNA + 1),
+                           y = nFeature_RNA,
+                           color = HTO_maxID)) +
+  geom_density2d(mapping = aes(x = log10(nCount_RNA + 1),
+                           y = nFeature_RNA),
+                 color = "blue") +
+  geom_vline(mapping = aes(xintercept = log10(5e3+1)),
+             linetype = 2) +
+  # geom_vline(mapping = aes(xintercept = log10(1e6+1)),
+  #            linetype = 2) +
+  geom_hline(mapping = aes(yintercept = 2000),
+             linetype = 2) +
+  #scale_color_manual(values = batch_color) +
+  scale_y_continuous(breaks = seq(0,11000, by = 1000))+
+  labs(y = "Number of expressed genes",
+       x = "Number of UMIs, log10 scaled",
+       title = str_interp("All sequenced cells \n(n = ${ncol(h5)})")) +
+  theme(legend.position = "bottom") #+ coord_fixed(3.5e-4)
+ggExtra::ggMarginal(p, colour = "darkblue", fill = "grey", type = "densigram")
+```
+
+
+```{r scatter_nGene_nUMI_2, fig.width=8, fig.height=6}
+ggplot(data = h5@meta.data) + 
+  geom_point(mapping = aes(x = log10(nCount_RNA + 1),
+                           y = nFeature_RNA,
+                           color = HTO_maxID)) +
+  geom_density2d(mapping = aes(x = log10(nCount_RNA + 1),
+                           y = nFeature_RNA),
+                 color = "blue") +
+  geom_vline(mapping = aes(xintercept = log10(5e3+1)),
+             linetype = 2) +
+  # geom_vline(mapping = aes(xintercept = log10(1e6+1)),
+  #            linetype = 2) +
+  geom_hline(mapping = aes(yintercept = 2000),
+             linetype = 2) +
+  #scale_color_manual(values = batch_color) +
+  scale_y_continuous(breaks = seq(0,11000, by = 1000))+
+  facet_wrap(~HTO_maxID) +
+  labs(y = "Number of expressed genes",
+       x = "Number of UMIs, log10 scaled",
+       title = str_interp("All sequenced cells \n(n = ${ncol(h5)})")) +
+  theme(legend.position = "bottom") #+ coord_fixed(3.5e-4)
+```
+
+# save seurat
+```{r save_seurat}
+if(!is.null(save2seurat)){
+  save(h5, file = save2seurat)
+}
+```
+
