@@ -14,7 +14,7 @@ pp_centerData(
 )
 }
 \arguments{
-\item{data}{expression matrix of feature by cell, ususally normalized (in log scale) but not feature scaled.}
+\item{data}{expression matrix of feature by cell, usually normalized (in log scale) but not feature scaled.}
 
 \item{group_by}{a vector including cell annotations}
 

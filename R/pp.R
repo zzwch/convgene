@@ -1,6 +1,6 @@
 #' Scale data in each group
 #'
-#' @param data expression matrix of feature by cell, ususally normalized (in log scale) but not feature scaled.
+#' @param data expression matrix of feature by cell, usually normalized (in log scale) but not feature scaled.
 #' @param group_by a vector including cell annotations
 #' @param by_log calculate in log scale or in normalized scale; If TRUE log_base will be ignored.
 #' @param log_base base::exp(1) or 2 or other else, depends on your normalization method.
@@ -20,8 +20,8 @@ pp_centerData <- function(
   center = T,
   scale = T){
 
-  # data <- as.matrix(data)
-  data <- if(!by_log) log_base^data
+  if(!by_log) data <- log_base^data
+  data <- as.matrix(data)
 
   if(IsNULLorNA(group_by)) group_by <- rep("A", ncol(data))
 
