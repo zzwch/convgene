@@ -1,4 +1,22 @@
 
+
+#' normalize UMI matrix to TPM
+#'
+#' @param umi umi matrix
+#' @param scale.factor scale factor. default 1e6. recommend the mean of colSums(umi)
+#' @param margin Cells in which margin
+#'
+#' @return a matrix of tpm values
+#' @export
+#'
+#' @examples
+#'
+umi2tpm <- function(umi, scale.factor= 1e6, margin = 2){
+  apply(umi, margin, function(x){
+    scale.factor*x/sum(x)
+  })
+}
+
 #' convert genes symbols between organisms
 #'
 #' using getLDS function of biomaRt to convert human genes to mouse genes or vice versa.

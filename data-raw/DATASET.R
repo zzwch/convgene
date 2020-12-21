@@ -1,6 +1,8 @@
 ## code to prepare `DATASET` dataset goes here
 
-
+# mSTRT barcodes
+strt96barcodes <- read.csv(file = "data-raw/96-8bp-barcode.csv")
+strt96barcodes <- paste0("sc", strt96barcodes$BarID)
 
 # genesets
 genesets <- list()
@@ -63,5 +65,7 @@ gradient_colors <- list(
   gg9gorb = c( "grey96", "grey90","gray","orange", "red","brown")
 )
 
+##########################
 usethis::use_data(scanpy_colors, discrete_colors, gradient_colors,
+                  strt96barcodes,
                   overwrite = TRUE)

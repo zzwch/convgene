@@ -143,3 +143,304 @@ pp_hashtagDemultiplex <- function(
                       hashtag = hashtag
                     ))
 }
+
+#' Annotate seurat data derived by pp_hashtagDemultiplex function
+#'
+#' @param files seurat Rdata files produced by pp_hashtagDemultiplex
+#' @param metadata annotation information for each file/seurat_object.
+#' e.g. list(c(Batch = "b1"), c(Batch = "b2"), NULL, c(Batch = "b4"))
+#'
+#' @return a list of seurat objects
+#' @export
+#'
+#' @examples
+#'
+pp_annotateHashtagSeurat <- function(files, metadata = NULL){
+  message("Be carefull the correspondence between files and metadata!")
+  if(!is.null(metadata) && length(files) != length(metadata)){
+    stop("metadata should be NULL, or with equal length of files!")
+  }
+  lapply(seq_along(files), function(i){
+    seurat_obj <- load(files[i])
+    seurat_obj <- get(seurat_obj)
+    if(!is.null(metadata[[i]])){
+      for(x in metadata[i]){
+        seurat_obj[[names(x)]] <- x
+      }
+    }
+    return(seurat_obj)
+  })
+}
+
+
+
+#' A wrapper function to quickly run standard processing pipeline
+#'
+#' Run NormalizeData, CellCycleScoring, FindVariableFeatures, ScaleData, RunUMAP/TSNE and FindClusters.
+#'
+#' @param object a Seurat object
+#' @param scale.factor Sets the scale factor for cell-level normalization. (NormalizeData)
+#' @param s.features A vector of features associated with S phase (CellCycleScoring)
+#' @param g2m.features A vector of features associated with G2M phase (CellCycleScoring)
+#' @param do.regress.cc regress out cell cycle scores (ScaleData)
+#' @param pp do SCTransform or standard RNA process
+#' @param nfeatures Number of features to return (SCTransform/FindVariableFeatures)
+#' @param ndim Number of dimensions to use for dimensionality reduction and clustering (RunUMAP/TSNE/FindClusters)
+#' @param skip_tsne you may set TRUE to skip RunTSNE step for large dataset.
+#' @param resolution Value of the resolution parameter (FindClusters)
+#'
+#' @return a Seurat object
+#' @export
+#'
+#' @examples
+#'
+pp_preprocess <- function(object,
+                          scale.factor = 1e4,
+                          s.features = cc.genes$s.genes,
+                          g2m.features = cc.genes$g2m.gene,
+                          do.regress.cc = T,
+                          pp = c("SCT", "RNA"),
+                          nfeatures = 2000,
+                          ndim = 20,
+                          skip_tsne = F,
+                          resolution = 0.5){
+  DefaultAssay(object) <- "RNA"
+  object %<>% NormalizeData(scale.factor = scale.factor) %>%
+    CellCycleScoring(s.features = s.features, g2m.features = g2m.features, set.ident = T)
+
+  vars.to.regress <- if(do.regress.cc) c("S.Score", "G2M.Score") else NULL
+  if(pp == "SCT"){
+    object %<>% SCTransform(variable.features.n = nfeatures, vars.to.regress = vars.to.regress)
+  }else{
+    object %<>% FindVariableFeatures(nfeatures = nfeatures) %>%
+      ScaleData(vars.to.regress = vars.to.regress)
+  }
+
+  object %<>% RunPCA()
+
+  object %<>% RunUMAP(dims = 1:ndim)
+  if(!skip_tsne) object %<>% RunTSNE(dims = 1:ndim)
+  object %<>% FindNeighbors(dims = 1:ndim) %>% FindClusters(resolution = resolution)
+  return(object)
+}
+
+
+
+#' A wrapper function to quickly run fastMNN using SeuratWrappers::RunFastMNN
+#'
+#' Run NormalizeData, CellCycleScoring, SelectIntegrationFeatures, RunFastMNN, RunUMAP/TSNE, FindClusters and FindMarkers.
+#' And save object_mnn and object_degs to xls and Rdata files.
+#'
+#' @param object_list a list of Seurat objects
+#' @param genes_used Set NULL to use the intersection of all Seurat objects.
+#' @param batch_by Attribute for splitting. Default is "Batch". (SplitObject)
+#' @param scale.factor Sets the scale factor for cell-level normalization. Calculated in RNA assay. (NormalizeData)
+#' @param s.features A vector of features associated with S phase. Calculated in RNA assay. (CellCycleScoring)
+#' @param g2m.features A vector of features associated with G2M phase. Calculated in RNA assay. (CellCycleScoring)
+#' @param assay which assay to be used for integration. default RNA.
+#' @param nfeatures Number of features to return (SelectIntegrationFeatures)
+#' @param integration_features if NULL use nfeatures, else use these feature for fastMNN
+#' @param remove_ccgenes_by_cor whether to exclude cell cycle-related genes using correlation method.
+#' @param cc_cor_th feature genes with correlation coefficient larger than this threshold will be removed.
+#' @param mnn_d Number of dimensions to use for dimensionality reduction in multiBatchPCA. (batchelor::fastMNN)
+#' @param seed random seed for fastMNN
+#' @param skip_tsne you may set TRUE to skip RunTSNE step for large dataset.
+#' @param resolution Value of the resolution parameter (FindClusters)
+#' @param save_object_prefix Set NULL to skip save files and FindAllMarker steps. Or a character setting the object prefix, e.g. AAA will get AAA_mnn and AAA_degs being returned.
+#' @param save_degs_dir {save_object_prefix}_degs.seurat_clusters.{sys.time}.xls will be written to here.
+#' @param logfc.threshold Limit testing to genes which show at least X-fold difference (log-scale) between the two groups of cells. (FindAllMarkers)
+#' @param min.pct only test genes that are detected in a minimum fraction of min.pct cells in either of the two populations. (FindAllMarkers)
+#' @param save_rdata_dir {save_object_prefix}_mnn.seurat.{sys.time}.Rdata will be written to here.
+#' @param save_add.sys.time whether to add sys.time to file names.
+#' @param ... Extra parameters passed to batchelor::fastMNN.
+#'
+#' @return seurat object if save_object_prefix is NULL, else saved files.
+#' @export
+#'
+#' @examples
+#'
+pp_fastMNN <- function(object_list, genes_used = NULL,
+                       batch_by = "Batch",
+                       scale.factor = 1e5,
+                       s.features = cc.genes$s.genes, g2m.features = cc.genes$g2m.gene,
+                       assay = c("RNA", "SCT"),
+                       nfeatures = 2000,
+                       integration_features = NULL,
+                       remove_ccgenes_by_cor = T, cc_cor_th = 0.3,
+                       mnn_d = 20, seed = 666, skip_tsne = F,
+                       resolution = 0.5,
+                       save_object_prefix = NULL,
+                       save_degs_dir = "tables/",
+                       logfc.threshold = log(2), min.pct = 0.25,
+                       save_rdata_dir = "seuratData/",
+                       save_add.sys.time = F,
+                       ...){
+
+  if(is.null(genes_used)){
+    genes_used <- Reduce(intersect, lapply(object_list, rownames))
+  }
+
+  for(i in 1:length(object_list)){
+    object_list[[i]]$Dataset <- paste0("Dataset_", i)
+  }
+  object_merge <- merge(object_list[[1]], object_list[-1])[genes_used, ]
+
+  DefaultAssay(object_merge) <- "RNA"
+  object_merge %<>% NormalizeData(scale.factor = scale.factor) %>%
+    CellCycleScoring(s.features = s.features, g2m.features = g2m.features, set.ident = T)
+
+  assay <- match.arg(assay)
+  if(assay == "SCT"){
+    object_merge %<>% SCTransform(variable.features.n = nfeatures)
+  }
+
+  # the following function should use default assay.
+
+  object_merge_list <- SplitObject(object_merge, split.by = batch_by)
+  object_merge_features <- SelectIntegrationFeatures(
+    object_merge_list,
+    nfeatures = nfeatures,
+    fvf.nfeatures = nfeatures#, assay = rep("RNA",length(object_merge_list))
+    )
+
+  if(!is.null(integration_features)) object_merge_features <- integration_features
+  ## CC genes
+  if(remove_ccgenes_by_cor){
+    object_merge_cc_cor <- apply(GetAssayData(object_merge)[object_merge_features,], 1,
+                                 function(x){
+                                   max(abs(cor(x, object_merge$S.Score)),
+                                       abs(cor(x, object_merge$G2M.Score)))
+                                 }
+    )
+    object_merge_features <- setdiff(object_merge_features, names(which(object_merge_cc_cor > cc_cor_th)))
+  }
+
+
+  object_merge_mnn_d <- mnn_d
+  set.seed(seed) # seems like the following function produce random result
+  object_merge_mnn <- SeuratWrappers::RunFastMNN(
+    object_merge_list,
+    #assay = "RNA",
+    features = object_merge_features,
+    d = object_merge_mnn_d,
+    ...
+  )
+
+  object_merge_mnn %<>% RunUMAP(reduction = "mnn", dims = 1:object_merge_mnn_d)
+  if(!skip_tsne) object_merge_mnn %<>% RunTSNE(reduction = "mnn", dims = 1:object_merge_mnn_d)
+
+  object_merge_mnn %<>% FindNeighbors(dims = 1:object_merge_mnn_d, reduction = "mnn")
+  object_merge_mnn %<>% FindClusters(resolution = resolution)
+
+  if(!is.null(save_object_prefix)){
+    time_suffix <- ifelse(save_add.sys.time, base::Sys.time(), "")
+    degs_file <- file.path(save_degs_dir, paste0(save_object_prefix, ".degs.seurat_clusters.", time_suffix,".xls"))
+    rdata_file <- file.path(save_rdata_dir, paste0(save_object_prefix, "_mnn.seurat.", time_suffix,".Rdata"))
+
+    object_merge_degs <- FindAllMarkers(object_merge_mnn, assay = "RNA",
+                                        logfc.threshold = logfc.threshold, min.pct = min.pct, only.pos = T)
+    WriteXLS::WriteXLS(object_merge_degs, ExcelFileName = degs_file)
+
+    assign(paste0(save_object_prefix, "_mnn"), object_merge_mnn)
+    assign(paste0(save_object_prefix, "_degs"), object_merge_degs)
+    save(list = paste0(save_object_prefix, c("_mnn", "_degs")), file = rdata_file)
+  }else{
+    return(object_merge_mnn)
+  }
+}
+
+#' A wrapper function to quickly run fastMNN using SeuratWrappers::RunFastMNN
+#'
+#' Run NormalizeData, CellCycleScoring, SelectIntegrationFeatures, RunFastMNN, RunUMAP/TSNE, FindClusters and FindMarkers.
+#' And save object_mnn and object_degs to xls and Rdata files.
+#'
+#' @param object_list a list of Seurat objects
+#' @param genes_used Set NULL to use the intersection of all Seurat objects.
+#' @param batch_by Attribute for splitting. Default is "Batch". (SplitObject)
+#' @param scale.factor Sets the scale factor for cell-level normalization. (NormalizeData)
+#' @param s.features A vector of features associated with S phase (CellCycleScoring)
+#' @param g2m.features A vector of features associated with G2M phase (CellCycleScoring)
+#' @param nfeatures Number of features to return (SelectIntegrationFeatures)
+#' @param do.regress.cc regress out cell cycle scores (ScaleData)
+#' @param ndim Number of dimensions to use for dimensionality reduction in multiBatchPCA. (batchelor::fastMNN)
+#' @param skip_tsne you may set TRUE to skip RunTSNE step for large dataset.
+#' @param resolution Value of the resolution parameter (FindClusters)
+#' @param save_object_prefix Set NULL to skip save files and FindAllMarker steps. Or a character setting the object prefix, e.g. AAA will get AAA_mnn and AAA_degs being returned.
+#' @param save_degs_dir {save_object_prefix}_degs.seurat_clusters.{sys.time}.xls will be written to here.
+#' @param logfc.threshold Limit testing to genes which show at least X-fold difference (log-scale) between the two groups of cells. (FindAllMarkers)
+#' @param min.pct only test genes that are detected in a minimum fraction of min.pct cells in either of the two populations. (FindAllMarkers)
+#' @param save_rdata_dir {save_object_prefix}_mnn.seurat.{sys.time}.Rdata will be written to here.
+#' @param save_add.sys.time whether to add sys.time to file names.
+#' @param ... Extra parameters passed to IntegrateData
+#'
+#' @return seurat object if save_object_prefix is NULL, else saved files.
+#' @export
+#'
+#' @examples
+#'
+pp_seuratV3Integration <- function(object_list, genes_used = NULL,
+                       batch_by = "Batch",
+                       scale.factor = 1e5,
+                       s.features = cc.genes$s.genes, g2m.features = cc.genes$g2m.gene,
+                       nfeatures = 2000, do.regress.cc = T,
+                       ndim = 20, skip_tsne = F,
+                       resolution = 0.5,
+                       save_object_prefix = NULL,
+                       save_degs_dir = "tables/",
+                       logfc.threshold = log(2), min.pct = 0.25,
+                       save_rdata_dir = "seuratData/",
+                       save_add.sys.time = F,
+                       ...){
+
+  if(is.null(genes_used)){
+    genes_used <- Reduce(intersect, lapply(object_list, rownames))
+  }
+
+  for(i in 1:length(object_list)){
+    object_list[[i]]$Dataset <- paste0("Dataset_", i)
+  }
+  object_merge <- merge(object_list[[1]], object_list[-1])[genes_used, ]
+
+  DefaultAssay(object_merge) <- "RNA"
+
+  object_merge %<>% NormalizeData(scale.factor = scale.factor) %>%
+    CellCycleScoring(s.features = s.features, g2m.features = g2m.features, set.ident = T)
+
+  object_merge_list <- SplitObject(object_merge, split.by = batch_by)
+  for (i in 1:length(object_merge_list)) {
+    object_merge_list[[i]] <- FindVariableFeatures(
+      object_merge_list[[i]],
+      nfeatures = nfeatures, verbose = FALSE)
+  }
+
+  object_merge_anchors <- FindIntegrationAnchors(object.list = object_merge_list)
+  object_merge_integrated <- IntegrateData(anchorset = object_merge_anchors, ...)
+
+  vars.to.regress <- if(do.regress.cc) c("S.Score", "G2M.Score") else NULL
+
+  object_merge_integrated <- ScaleData(object_merge_integrated, verbose = FALSE,
+                                       vars.to.regress = vars.to.regress)
+  object_merge_integrated %<>% RunPCA()
+
+  object_merge_integrated %<>% RunUMAP(reduction = "pca", dims = 1:ndim)
+  if(!skip_tsne) object_merge_integrated %<>% RunTSNE(reduction = "pca", dims = 1:ndim)
+
+  object_merge_integrated %<>% FindNeighbors(dims = 1:ndim, reduction = "pca")
+  object_merge_integrated %<>% FindClusters(resolution = resolution)
+
+  if(!is.null(save_object_prefix)){
+    time_suffix <- ifelse(save_add.sys.time, base::Sys.time(), "")
+    degs_file <- file.path(save_degs_dir, paste0(save_object_prefix, ".degs.seurat_clusters.", time_suffix,".xls"))
+    rdata_file <- file.path(save_rdata_dir, paste0(save_object_prefix, "_integrated.seurat.", time_suffix,".Rdata"))
+
+    object_merge_degs <- FindAllMarkers(object_merge_integrated, assay = "RNA",
+                                        logfc.threshold = logfc.threshold, min.pct = min.pct, only.pos = T)
+    WriteXLS::WriteXLS(object_merge_degs, ExcelFileName = degs_file)
+
+    assign(paste0(save_object_prefix, "_integrated"), object_merge_integrated)
+    assign(paste0(save_object_prefix, "_degs"), object_merge_degs)
+    save(list = paste0(save_object_prefix, c("_integrated", "_degs")), file = rdata_file)
+  }else{
+    return(object_merge_integrated)
+  }
+}

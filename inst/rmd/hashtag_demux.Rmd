@@ -67,7 +67,7 @@ h5 <- CreateSeuratObject(counts = h5d$`Gene Expression`)
 # ncount derived from MT genes
 mtgenes <- grep("MT-", rownames(h5), value = T, ignore.case = T)
 # in case macaca mito genes
-if(length(mtgenes) == 0) mtgenes <- read.csv(read.csv(file = "inst/rmd/mcc_MT_genes.csv"))$gene_id
+if(length(mtgenes) == 0) mtgenes <- read.csv(file = system.file("rmd", "mcc_MT_genes.csv", package = "convgene"))$gene_id
 
 h5$nMT_RNA <- Matrix::colSums(Assays(h5, slot = "RNA")[mtgenes,])
 h5$rMT_RNA <- h5$nMT_RNA/h5$nCount_RNA

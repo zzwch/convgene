@@ -528,6 +528,8 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
   # ggData
   ggTab <- reshape2::melt(tab)
   ggTab$value[ggTab$value == 0] <- NA
+
+  if(!is.factor(ggTab[,1])) ggTab[,1] <- factor(ggTab[,1])
   ggTab[,1] <- factor(ggTab[,1],
                       levels = rev(levels(ggTab[,1])))
   # ggTab[,2] <- factor(ggTab[,2],
@@ -693,3 +695,82 @@ pl_rastrFeaturePlot <- function(object, features, coord_fixed_ratio = 1, ncol = 
     }),ncol = ncol, align = align)
 }
 
+
+#' Plot the expression of one gene using bar/vline, or so called barplot
+#'
+#' @param x numeric vector, such as expression of one gene in all cells.
+#' @param cluster character vector of cell annotation, such as cell clusters.
+#'
+#' @return a ggplot object
+#' @export
+#'
+#' @examples
+#'
+pl_segmentPlot <- function(x, cluster){
+  ggData <- data.frame(yend = x,
+                       Cluster = cluster) %>%
+    arrange(Cluster, yend) %>%
+    mutate(x = seq_along(Cluster), y = 0)
+
+  ggplot() +
+    geom_segment(mapping = aes(x = x, y = y, xend = x, yend = yend, color = Cluster),
+                 data = ggData ) +
+    geom_vline(mapping = aes(xintercept = c(1, unname(cumsum(table(ggData$Cluster))))),
+               color = "black", linetype = "dashed") +
+    scale_x_continuous(expand = expansion()) +
+    scale_y_continuous(expand = expansion(c(0, 0.1))) +
+    theme_bw() +
+    theme(panel.grid = element_blank(),
+          plot.title = element_text(hjust = 0.5))
+}
+
+
+#' plot multiple DimPlot for each batch
+#'
+#' This may be useful for displaying multiple datasets
+#'
+#' @param object Seurat object
+#' @param reduction umap/tsne/pca
+#' @param split_by split dimplot by this metadata
+#' @param groups_label plot using DimPlot with label = TRUE
+#' @param groups plot using pl_dimplot
+#' @param coord_fixed_ratio only valid for groups
+#' @param pt.size point size
+#' @param colors point color
+#'
+#' @return multiple plots
+#' @export
+#'
+#' @examples
+#'
+pl_splitDimplot <- function(object, reduction = "umap",
+                            split_by = "Dataset",
+                   groups_label = c("seurat_clusters"),
+                   groups = c("Batch", "Phase"),
+                   coord_fixed_ratio = 1, pt.size = 1,
+                   colors = scanpy_colors$default_64){
+
+  split_by <- object[[split_by]][[split_by]]
+  for(i in sort(unique(split_by))){
+    subset_cells <-  colnames(object)[split_by == i]
+
+    for(j in groups_label){
+      print(
+        DimPlot(object, group.by = j, label = T,
+                #cols = cluster_color,
+                cols = colors,
+                cells = subset_cells,
+                pt.size = pt.size, reduction = reduction) +
+          NoLegend() + coord_fixed()
+      )
+    }
+
+    for(k in groups){
+      print(
+        pl_dimplot(object, group_by = k, subset_cells = subset_cells, reduction = reduction,
+                   cols = colors,  pt.size = pt.size) +
+          coord_fixed(coord_fixed_ratio)
+      )
+    }
+  }
+}
