@@ -9,11 +9,11 @@ rowSmooth(mat, n = NULL, proportion = 0.2, do.scale = F)
 \arguments{
 \item{mat}{matrix}
 
-\item{n}{smooth over n columns}
+\item{n}{smooth over \code{n} columns}
 
-\item{proportion}{smooth over proportion*ncol(mat)}
+\item{proportion}{smooth over \code{proportion*ncol(mat)}}
 
-\item{do.scale}{scale mat after being smoothed}
+\item{do.scale}{scale \code{mat} after being smoothed}
 }
 \value{
 matrix

@@ -4,7 +4,15 @@
 \alias{tl_crossTableEnrichment}
 \title{statistics of cross table}
 \usage{
-tl_crossTableEnrichment(tab, p.adjust = T, heatmap = T)
+tl_crossTableEnrichment(
+  tab,
+  p.adjust = T,
+  heatmap = T,
+  pal_1 = "Purples",
+  pal_2 = "Purples",
+  pal_3 = "YlOrRd",
+  pal_4 = "YlGn"
+)
 }
 \arguments{
 \item{tab}{a table object}
@@ -12,6 +20,8 @@ tl_crossTableEnrichment(tab, p.adjust = T, heatmap = T)
 \item{p.adjust}{adjust pvalue}
 
 \item{heatmap}{plot heatmap}
+
+\item{pal_1, pal_2, pal_3, pal_4}{palette name in \code{\link{RColorBrewer::brewer.pal}}}
 }
 \value{
 a matrix of pvalues

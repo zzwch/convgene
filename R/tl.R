@@ -423,13 +423,20 @@ tl_calcFeatureScore <- function(
 #' @param tab a table object
 #' @param p.adjust adjust pvalue
 #' @param heatmap plot heatmap
+#' @param pal_1,pal_2,pal_3,pal_4 palette name in \code{\link{RColorBrewer::brewer.pal}}
 #'
 #' @return a matrix of pvalues
 #' @export
 #'
 #' @examples
 #'
-tl_crossTableEnrichment <- function(tab, p.adjust = T,heatmap = T){
+tl_crossTableEnrichment <- function(
+  tab, p.adjust = T,heatmap = T,
+  pal_1 = "Purples",
+  pal_2 = "Purples",
+  pal_3 = "YlOrRd",
+  pal_4 = "YlGn"){
+
   tab.p <- as.matrix(tab + NA)
   tab.d <- dim(tab)
   tab.rs <- as.numeric(rowSums(tab))
@@ -456,18 +463,188 @@ tl_crossTableEnrichment <- function(tab, p.adjust = T,heatmap = T){
     tab.h <- tab
     tab.h[tab == 0] <- NA
     pheatmap::pheatmap(tab.h, cluster_cols = F, cluster_rows = F, display_numbers = tab,
-                       color = colorRampPalette(RColorBrewer::brewer.pal(9, "Purples"))(11))
+                       color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_1))(11))
     pheatmap::pheatmap(tab.h, cluster_cols = F, cluster_rows = F,
-                       color = colorRampPalette(RColorBrewer::brewer.pal(9, "Purples"))(11), scale = "row")
+                       color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_2))(11), scale = "row")
     tab.ph <- -log10(abs(tab.p)) * sign(tab.p)
     tab.ph[tab.ph < -log10(0.05)] <- NA
-    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F,
-                       color = colorRampPalette(RColorBrewer::brewer.pal(9, "YlOrRd"))(11))
+    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F, display_numbers = tab.h,
+                       color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_3))(11))
     tab.ph <- log10(abs(tab.p)) * sign(tab.p)
     tab.ph[tab.ph < -log10(0.05)] <- NA
-    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F,
-                       color = colorRampPalette(RColorBrewer::brewer.pal(9, "YlGn"))(11))
+    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F, display_numbers = tab.h,
+                       color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_4))(11))
   }
   return(tab.p)
 }
 
+
+#' A wrapper function for clusterprofiler enrichment analysis (compareCluster)
+#'
+#' @param degs_table deg results from FindAllMarkers
+#' @param enrichFun enrich function name in clusterprofiler
+#' @param OrgDb "org.Hs.eg.db" or "org.Mm.eg.db according to your organism
+#'
+#' @return a list of go and simplified go results
+#' @export
+#'
+#' @examples
+#'
+tl_goCompareCluster <- function(degs_table, topn = 200, enrichFun = "clusterProfiler::enrichGO",
+                               OrgDb = "org.Hs.eg.db"){
+  # clusterprofiler
+  message("Enrichment analysis using clusterProfiler...")
+  cluster_go <- clusterProfiler::compareCluster(
+    data = degs_table %>% group_by(cluster) %>% top_n(topn, -p_val) %>% top_n(topn, avg_logFC),
+    geneClusters = gene~cluster, fun = enrichFun,
+    OrgDb = OrgDb, keyType = "SYMBOL", ont = "BP")
+  #message("Simplify enrichment results...")
+  #cluster_go_sim <- simplify(cluster_go)
+
+  return(cluster_go)
+}
+
+
+#' A wrapper function for clusterprofiler GO enrichment analysis (enrichGO)
+#'
+#' @param gene a vector of focused genes
+#' @param simplify do simplify or not
+#' @param OrgDb org.Hs.eg.db or org.Mm.eg.db, or else
+#' @param keyType SYMBOL or ENTREZID, or else
+#' @param ont BP, MF, CC
+#' @param ... other parameters for enrichGO
+#'
+#' @return a list of GO and simplified GO results
+#' @export
+#'
+#' @examples
+#'
+tl_go <- function(gene, simplify = F, OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP", ...){
+  # clusterprofiler
+  message("Enrichment analysis using clusterProfiler...")
+  cluster_go <- clusterProfiler::enrichGO(gene, OrgDb, keyType, ont, ...)
+
+  if(simplify){
+    message("Simplify enrichment results...")
+    cluster_go_sim <- clusterProfiler::simplify(cluster_go)
+    return(list(GO = cluster_go, GOSIM = cluster_go_sim))
+  }else{
+    return(cluster_go)
+  }
+}
+
+
+#' Using class::knn method in Dimension Reduction space to classify cells with referenced clusters
+#'
+#' @param object seurat3 object
+#' @param reference_group_by a meta.data colname
+#' @param reduction dimension reduction
+#' @param dims use all dims if NULL, or specify it
+#' @param k number of kNN used to predict cluster
+#' @param reference_cells cells used as reference
+#' @param predict_cells cells to be predicted/classified
+#'
+#' @return seurat object
+#' @importFrom class knn
+#' @export
+#'
+#' @examples
+#'
+tl_knnClassify <- function(object, reference_group_by, predict_group_by = "knnClassify",
+                           reduction = "mnn", dims = NULL, k = 20,
+                           reference_cells = NULL, predict_cells = NULL){
+  DimSpace <- Embeddings(object, reduction = reduction)
+  if(!is.null(dims)) DimSpace <- DimSpace[, dims]
+
+  cell_groups <- object[[reference_group_by]]
+  if(is.null(reference_cells)) reference_cells <- rownames(na.omit(cell_groups))
+  if(is.null(predict_cells)) predict_cells <- names(na.action(na.omit(cell_groups)))
+  res_knn <- class::knn(DimSpace[reference_cells,],
+                        DimSpace[predict_cells,],
+                        cell_groups[reference_cells, 1],
+                        k = k, prob = T)
+  cell_groups[predict_cells, 1] <- as.character(res_knn)
+  object[[predict_group_by]] <- cell_groups
+
+  return(object)
+}
+
+
+#' Rotate or Flip reduction
+#'
+#' @param object Seurat object
+#' @param reduction reduction. eg. "umap"
+#' @param flip_x do x flipping
+#' @param flip_y do y flipping
+#' @param rotation angle in degree to rotate
+#'
+#' @return updated Seurat
+#' @export
+#'
+#' @examples
+#'
+tl_transDim <- function(object, reduction = "umap", flip_x = F, flip_y = F, rotation = 0){
+  dr <- Embeddings(object, reduction = reduction)
+  if(flip_x) dr[,1] <- -dr[,1]
+  if(flip_y) dr[,2] <- -dr[,2]
+  rotation <- pi*rotation/180
+  trans_matrix <- matrix(c(cos(rotation), sin(rotation), 0,
+                           -sin(rotation), cos(rotation), 0,
+                           0, 0, 1),
+                         nrow = 3, byrow = TRUE)
+  object@reductions[[reduction]]@cell.embeddings[,c(1,2)] <- t(trans_matrix %*% t(as.matrix(cbind(dr, 1))))[,c(1,2)]
+  return(object)
+}
+
+
+#' Add new Reduction to Seurat object
+#'
+#' @param object Seurat v3 object
+#' @param reduction reduction name
+#' @param dim.1 vector of 1st dimension
+#' @param dim.2 vector of 2nd dimension
+#' @param ... other params passed to CreateDimReducObject()
+#'
+#' @return updated Seurat object
+#' @export
+#'
+#' @examples
+#'
+tl_AddReduction <- function(object, reduction, dim.1, dim.2, ...){
+  embeddings <- as.matrix(cbind(dim.1, dim.2))
+  colnames(embeddings) <- paste(toupper(reduction), 1:2, sep = "_")
+  object@reductions[[tolower(reduction)]] <- CreateDimReducObject(embeddings = embeddings, key = paste0(toupper(reduction), "_"), ...)
+  return(object)
+}
+
+#' Reassign cell cycle pahse and set cc reduction
+#'
+#' @param object Seurat v3 object
+#' @param phase.name name added to meta.data
+#' @param s.th,g2m.th,slope threshold of S.Score and G2M.Score used to reassign phase, and slope is used for partition S and G2/M
+#' @param set.reduction set NULL if do not want to add cc reduction, Or set a character value for reduction name
+#' @param s.scores vector of S.Scores
+#' @param g2m.scores vector of G2M.Scores
+#'
+#' @return updated Seurat object
+#' @export
+#'
+#' @examples
+#'
+tl_CellCycleAssign <- function(object, phase.name = "Phase4", s.th = 0, g2m.th = 0, set.reduction = "cc", slope = 1, s.scores = "S.Score", g2m.scores = "G2M.Score"){
+  s.scores <- object[[s.scores]]
+  g2m.scores <- object[[g2m.scores]]
+
+  object[[phase.name]] <- case_when(
+    g2m.scores < g2m.th & s.scores < s.th ~ "Q/G0",
+    g2m.scores < g2m.th & s.scores >= s.th ~ "G1",
+    g2m.scores > g2m.th & (g2m.scores - g2m.th)/(s.scores - s.th) < slope & s.scores >= s.th  ~ "S",
+    TRUE ~ "G2/M"
+  ) %>% factor(levels = c("Q/G0", "G1", "S", "G2/M"))
+
+  if(!is.null(set.reduction)){
+    object <- tl_AddReduction(object = object, reduction = "CC", dim.1 = s.scores, dim.2 = g2m.scores)
+  }
+
+  return(object)
+}

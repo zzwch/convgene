@@ -13,6 +13,8 @@ gs_mmu <- list(cc.genes = Seurat::cc.genes,
 gs_hsa <- list(cc.genes = Seurat::cc.genes,
                cc.genes.updated.2019 = Seurat::cc.genes.updated.2019,
                cc.genes.union = mapply(union, Seurat::cc.genes, Seurat::cc.genes.updated.2019))
+##
+sex_genes <- c("XIST", "TSIX", "RPS4Y1", "EIF2S3Y", "DDX3Y")
 
 # scanpy_colors
 scanpy_colors <- list(
@@ -67,5 +69,5 @@ gradient_colors <- list(
 
 ##########################
 usethis::use_data(scanpy_colors, discrete_colors, gradient_colors,
-                  strt96barcodes,
+                  strt96barcodes, sex_genes,
                   overwrite = TRUE)

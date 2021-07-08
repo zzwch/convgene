@@ -8,6 +8,7 @@ pl_vioboxplot(
   meta_data,
   x,
   y,
+  fill_by = x,
   fill_colors = NULL,
   box_color = "black",
   box_fill_color = "white"
@@ -19,6 +20,8 @@ pl_vioboxplot(
 \item{x}{a string in colnames of meta_data, to be mapped as x-axis}
 
 \item{y}{a string in colnames of meta_data, to be mapped as y-axis}
+
+\item{fill_by}{a string in colnames of meta_data}
 
 \item{fill_colors}{fill colors of violins}
 

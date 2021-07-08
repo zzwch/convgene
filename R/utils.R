@@ -52,7 +52,7 @@ ConvertHomoGene <- function(
               attr_prefix = "hgnc_"),
     mouse = c(dataset = "mmusculus_gene_ensembl",
               attr_prefix = "mgi_"),
-    Macaque = c(dataset = "mmulatta_gene_ensembl",
+    macaque = c(dataset = "mmulatta_gene_ensembl",
                 attr_prefix = "hgnc_")
   )
   orgA <- orgDict[[orgA]]
@@ -76,6 +76,157 @@ ConvertHomoGene <- function(
     }
   }
   return(geneMap)
+}
+
+
+#' Conver MSigDB Human genes to Homologous Organism genes
+#'
+#' @param files MSigDB files in gmt format
+#' @param organism conversion organism
+#' @param use.entrez set TRUE if gmt files use entrez gene id but not symbol
+#' @param use.biomaRt use BioMart package to do conversion
+#' @param hcop.file Not Supportted for now! use HGNC Comparison of Orthology Predictions (HCOP) to do conversion. http://www.genenames.org/cgi-bin/hcop
+#' @param try.most Not used
+#'
+#' @return files
+#' @export
+#'
+#' @examples
+#'
+homoMSigDB <- function(files = NULL, organism = "mouse", use.entrez = F, use.biomaRt = T, hcop.file = NULL, try.most = T){
+
+  msigdb.files <- files
+
+  genesets <- lapply(msigdb.files, function(x){
+    read.gmt(gmtfile = x)
+  })
+  names(genesets) <- msigdb.files
+  allinone <- unique(Reduce(union, lapply(genesets, function(x) unlist(x$gmt))))
+
+  organism <- match.arg(organism)
+
+  homotable <- list(mouse =  c("mmusculus_gene_ensembl", "mgi_symbol"))
+
+  if(use.biomaRt){
+    if(is.null(hcop.file)){
+      human = biomaRt::useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+      homologous = biomaRt::useMart("ensembl", dataset = homotable[[organism]][1])
+
+      if(use.entrez){
+        allinone.mapping <- getLDS(attributes = c("entrezgene"),
+                                   filters = "entrezgene", values = allinone, mart = human,
+                                   attributesL = c("entrezgene"), martL = homologous)
+        colnames(allinone.mapping) <- c("human",organism)
+        allinone.mapping[["human"]] <- as.character(allinone.mapping[["human"]])# may be speed up when %in%
+        allinone.mapping[[organism]] <- as.character(allinone.mapping[[organism]])#
+
+      }else{
+
+        allinone.mapping <- getLDS(attributes = c("hgnc_symbol"),
+                                      filters = "hgnc_symbol", values = allinone, mart = human,
+                                      attributesL = c(homotable[[organism]][2]), martL = homologous)
+        colnames(allinone.mapping) <- c("human", organism)
+      }
+    }else{
+      stop("Please set hcop.file = NULL when use.biomaRt = TRUE, otherwise confusing!")
+    }
+  }else{
+    if(is.null(hcop.file)){
+      stop("Please set hcop.file to the homolog file when use.biomaRt = FALSE, otherwise confusing!\nPlease download mapping file from HGNC Comparison of Orthology Predictions (HCOP). http://www.genenames.org/cgi-bin/hcop")
+    }else{
+      stop("Sorry, havn't been done! contact lizc07@vip.qq.com")
+
+      ## to be continued
+      tmp <- try(hcop <- read.table(file = hcop.file, header = T, sep = "\t", row.names = NULL, quote = ""))
+      if(class(tmp) == "try-error"){
+        stop("\nCannot read your provided file!\nPlease download mapping file from HGNC Comparison of Orthology Predictions (HCOP). http://www.genenames.org/cgi-bin/hcop")
+      }else{
+        all.entrez.mapping <- unique(hcop[which(hcop$human_entrez_gene %in% all.entrez), c("human_entrez_gene", "mouse_entrez_gene", "mouse_symbol")])
+        all.symbols.mapping <- unique(hcop[which(hcop$human_symbol %in% all.symbols), c("human_symbol", "mouse_entrez_gene", "mouse_symbol")])
+
+
+      }
+
+    }
+
+  }
+
+  lapply(names(genesets), function(x){
+    gmt <- genesets[[x]][["gmt"]]
+    desc <- genesets[[x]][["desc"]]
+    for(i in names(gmt)){
+      gmt[[i]] <- unique(allinone.mapping[[organism]][which(allinone.mapping[["human"]] %in% gmt[[i]])])
+    }
+    write.gmt(gmt, desc, presuf_file_name(x, suffix = paste0(".",organism, ".", Sys.Date()), index = -1))
+  })
+
+  return()
+}
+
+#' Read gmt file
+#'
+#' @param gmtfile file name
+#'
+#' @return a list of genesets, each with both gene list and description list
+#' @export
+#'
+#' @examples
+#'
+read.gmt <- function(gmtfile = NULL){
+  gmt <- list()
+  desc <- list()
+  for(i in readLines(con = gmtfile)){
+    tmp <- strsplit(i, split = "\t")[[1]]
+    gmt[[tmp[1]]] <- tmp[-c(1,2)]
+    desc[[tmp[1]]] <- tmp[2]
+  }
+  return(list(gmt = gmt, desc = desc))
+}
+
+#' write gmt file
+#'
+#' @param gmt.list geneset list
+#' @param desc.list description list
+#' @param gmtfile file name
+#'
+#' @return NULL
+#' @export
+#'
+#' @examples
+#'
+write.gmt <- function(gmt.list = NULL, desc.list = NULL, gmtfile = NULL){
+  text <- NULL
+  for(i in names(gmt.list)){
+    text <- c(text, paste(c(i, desc.list[[i]], gmt.list[[i]]), collapse = "\t"))
+  }
+  writeLines(text = text, con = gmtfile)
+  return()
+}
+
+#' Add prefix and/or suffix for file name
+#'
+#' @param file_name file name to be added
+#' @param prefix prefix character
+#' @param suffix suffix character
+#' @param sep split file name by sep into multiple parts
+#' @param index add prefix to the index part. if <= 0, reverse order is used, then 0 is the last one and -1 is the last but one.
+#'
+#' @return new file name
+#' @export
+#'
+#' @examples
+#' presuf_file_name("./database/msigdb.gmt", "homo_")
+#' # "./database/homo_msigdb.gmt"
+#'
+presuf_file_name <- function(file_name, prefix = NULL, suffix = NULL, sep = ".", index = 1){
+  dir <- dirname(file_name)
+  base <- basename(file_name)
+  base.split <- strsplit(base, split = sep, fixed = T)[[1]]
+  if(index <= 0){
+    index <- length(base.split) + index
+  }
+  base.split[index] <- paste0(prefix, base.split[index], suffix)
+  file.path(dir, paste(base.split, collapse = sep))
 }
 
 #' similar to scales::rescale but use quantile 95
@@ -669,9 +820,9 @@ readRda <- function(file, verbose = F){
 #' smooth each row of matrix
 #'
 #' @param mat matrix
-#' @param n smooth over n columns
-#' @param proportion smooth over proportion*ncol(mat)
-#' @param do.scale scale mat after being smoothed
+#' @param n smooth over \code{n} columns
+#' @param proportion smooth over \code{proportion*ncol(mat)}
+#' @param do.scale scale \code{mat} after being smoothed
 #'
 #' @return matrix
 #' @export
@@ -697,7 +848,7 @@ rowSmooth <- function(mat, n = NULL, proportion = 0.2, do.scale = F){
 #' smooth a vector
 #'
 #' @param x a vector
-#' @param n smooth over n items
+#' @param n smooth over \code{n} items
 #'
 #' @return vector
 #' @export
@@ -787,3 +938,303 @@ setSummary <- function(x, y){
        intersect = intersect(x,y),
        union = union(x,y))
 }
+
+
+#' wrapper for quick transform from human gene to mouse gene
+#'
+#' @param x vector
+#' @param tolower do \code{tolower} first, then \code{Hmisc::capitalize}
+#'
+#' @return vector
+#' @importFrom Hmisc capitalize
+#' @export
+#'
+#' @examples
+#'
+toCapitablize <- function(x, tolower = T){
+  if(tolower)  Hmisc::capitalize(tolower(x)) else Hmisc::capitalize(x)
+}
+
+
+#' Generate Homologous Gene ID Table from MGI's HOM_AllOrganism.rpt file
+#'
+#' @param MGI_file HOM_AllOrganism.rpt downloaded from http://www.informatics.jax.org/downloads/reports/HOM_AllOrganism.rpt
+#' @param colnames_keys should not be changed!
+#' @param multiple_orgs organisms, in \code{Common Organism Name} column of \code{MGI_file}, to be collapsed or compared,
+#' @param multiple_orgs_short short prefix for the organisms in \code{mulitple_orgs}
+#' @param centric_org which organism's Symbol should be used as HomoloSymbol
+#'
+#' @return a data.frame table
+#' @import tidyverse
+#' @import magrittr
+#' @export
+#'
+#' @examples
+#'
+getMGIHomoGeneTable <- function(
+  MGI_file,
+  colnames_keys = c("HomoloGene ID", "Common Organism Name", "Symbol"),
+  multiple_orgs = c("human", "mouse, laboratory", "macaque, rhesus"),
+  multiple_orgs_short = c("Hs", "Mm", "Mc"),
+  centric_org = "human"
+){
+
+  orgs <- read.table(
+    file = MGI_file,
+    header = T, sep = "\t",
+    check.names = F,
+    quote = "", comment.char = "",
+    stringsAsFactors = F)
+
+  hm <- orgs %>%
+    filter(`Common Organism Name` %in% multiple_orgs) %>%
+    mutate(`Common Organism Name` = factor(`Common Organism Name`, levels = multiple_orgs)) %>%
+    dplyr::select(colnames_keys) %>%
+    set_colnames(c("homoloID", "organism", "gene")) %>%
+    #mutate_at("organism", function(x) str_replace(x, ",.*", "")) %>%
+    unique
+
+  hm_bid <- tapply(hm$gene, list(hm$homoloID, hm$organism), c)
+  hm_len <- as.data.frame(apply(hm_bid, c(1,2), function(x) length(unlist(x))))
+
+  hm_sym <- hm_len %>%
+    rownames_to_column %>%
+    mutate(
+      centric_symbol = sapply(hm_bid[,centric_org], function(x) ifelse(is.null(unlist(x)[1]), "", unlist(x)[1])),
+      hm_prefix = apply(hm_len, 1, function(x){
+        if(any(x == 0)) as.character(NA) else paste0(multiple_orgs_short[x>1], collapse = "")
+      }),
+      homoloSymbol = case_when(
+        hm_prefix == "" ~ centric_symbol,
+        is.na(hm_prefix) ~ hm_prefix,
+        TRUE ~ as.character(stringr::str_glue("{hm_prefix}({centric_symbol})"))
+      )) %>%
+    column_to_rownames
+
+  table(hm_len$hm_prefix)
+  # Hs    Mm  MmHs
+  # 16468    60   212    10
+
+  hm_res <- hm %>%
+    mutate(homoloSymbol = hm_sym[as.character(homoloID), "homoloSymbol"]) %>%
+    dplyr::select(homoloID, homoloSymbol, gene, organism)
+
+  return(hm_res)
+}
+
+#' vlookup with multiple keys supported
+#'
+#' @param df data.frame
+#' @param x values to lookup; data.frame of values per row if multiple keys used
+#' @param keys colnames of \code{df} as key to search
+#' @param select colname(s) to return
+#' @param return.key whether to return keys
+#'
+#' @return vector or data.frame
+#' @export
+#'
+#' @examples
+#'
+vlookup <- function(df, x, keys = 1, select = NULL, collapse = "_", return.key = FALSE){
+  if(is.null(select)) {
+    select <- colnames(df)
+  }
+
+  if(length(keys) > 1) {
+    x <- apply(x, 1, paste, collapse = collapse)
+    df$key_collapsed <- apply(df[,keys], 1, paste, collapse = collapse)
+    keys <- "key_collapsed"
+  }
+
+  ret <- df[match(x, df[,keys]), select, drop = F]
+  if(return.key) ret <- cbind(x = x, ret)
+
+  return(ret)
+}
+
+
+#' calculate mean of gene expression values
+#'
+#' @param x gene expression values in log scale
+#' @param log.base base of log scale
+#' @param return.log mean returned in log scale or not
+#'
+#' @return mean value
+#' @export
+#'
+#' @examples
+#'
+calcLogMean <- function(x, log.base = exp(1), return.log = T){
+  m <- mean(log.base^x)
+  if(return.log) m <- log(m)/log(log.base)
+  return(m)
+}
+
+#' calculate Fold Change of gene expression values
+#'
+#' @param x,y gene expression values in log scale
+#' @param log.base base of log scale
+#' @param exact usually gene expression values were scaled and plus a pseudo count (eg. 1) and then log transformed. represented as log(UMI/10+1). Fold change would be not exact if do not minus the pseudo count, although pseudo count is usefull when denominator is zero.
+#' @param exact.plus pseudo count, usualy be 1.
+#' @param return.log fold change value returned in log scale or not
+#'
+#' @return fold change value of x compared to y
+#' @export
+#'
+#' @examples
+#'
+calcFoldChange <- function(x, y, log.base = exp(1), exact = T, exact.plus = 1, return.log = F){
+  if (!exact) exact.plus <- 0
+  fc <- (calcLogMean(x, log.base, return.log = F)-exact.plus)/(calcLogMean(y, log.base, return.log = F) - exact.plus)
+  if (return.log) fc <- log(fc)/log(log.base)
+
+  return(fc)
+}
+
+
+#' calculate the probability of collecting all kinds of coupons when collecting n coupons.
+#'
+#' @param prob probabilitys for each kind of coupon
+#' @param k default length of prob
+#' @param n.max collected 1:n.max coupons
+#' @param B an integer specifying the number of replicates used in the Monte Carlo test.
+#' @param seed for reproducibility
+#' @param replace sample wi/o replacing
+#'
+#' @return a vector of probabilities for 1:n.max cllections
+#' @export
+#'
+#' @examples
+#' # Given that 6 kinds of coupons, of which each's probability is 1/6,
+#' # Let's see the probability of collection all kinds of coupons for having n coupons.
+#'
+#' pmultinom_sample(rep(1,6)/6)
+pmultinom_sample <- function(prob, k = length(prob), n.max = 100, B = 1000, seed = 66, replace = TRUE){
+  result <- NULL
+  set.seed(seed)
+  for (i in seq_len(B)) {
+    result <- rbind(result, sample(paste0("k", seq_len(k)), n.max, replace=replace, prob=prob))
+  }
+  res_p <- NULL
+  for (j in 1:n.max) {
+    res_p[j] <- sum(apply(result[,1:j,drop = F], 1, function(x) length(unique(x))) == k)/B
+  }
+
+  return(res_p)
+}
+
+
+#' unlist by n times
+#'
+#' @param x list
+#' @param depth n depth
+#' @param use.names ogical. Should names be preserved?
+#'
+#' @return NULL or an expression or a vector of an appropriate mode to hold the list components.
+#' @export
+#'
+#' @examples
+#'
+unlist_depth <- function(x, depth = NA, use.names = T){
+  if(is.na(depth) || is.infinite(depth) || is.null(depth)){
+    unlist(x, recursive = T, use.names = use.names)
+  }else{
+    run_fun_n_times(unlist, x, times = depth, recursive = F)
+  }
+}
+
+#' Run function n times with output as input
+#'
+#' @param fun function
+#' @param x input also output
+#' @param times times
+#' @param ... other params
+#'
+#' @return x
+#' @export
+#'
+#' @examples
+#'
+run_fun_n_times <- function(fun, x, times = 1, ...){
+  for(i in seq_len(times)){
+    x <- fun(x, ...)
+  }
+  return(x)
+}
+
+
+#' read table from clipboard
+#'
+#' @inheritParams utils::read.table
+#' @param ... other params passed to \code{\link{utils::read.table}}
+#'
+#' @return a data.frame
+#' @export
+#'
+#' @examples
+#'
+readDataFrameFromClipboard <- function(header = T, sep = "\t", check.names = F, ...){
+  read.table(file = 'clipboard', header = header, sep = sep, check.names = check.names, ...)
+}
+
+
+#' write data.frame to clipboard
+#'
+#' @param sep separator
+#' @inheritParams utils::write.table
+#' @param ... other params passed to \code{\link{utils::write.table}}
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#'
+writeDataFrameToClipboard <- function(x, sep = "\t", row.names = F, col.names = F, ...){
+  write.table(x = x, file = "clipboard", sep = sep, row.names = row.names, col.names = col.names, ...)
+}
+
+#' set levels for a given column
+#'
+#' @param df data.frame
+#' @param x a colname of \code{df}
+#' @param levels levels for \code{df[[x]]}
+#'
+#' @return updated data.frame
+#' @export
+#'
+#' @examples
+#'
+setLevels <- function(df, x, levels){
+  df[[x]] <- factor(df[[x]], levels = levels)
+  return(df)
+}
+
+
+#' Show colours
+#'
+#' A alias function for scales::show_col
+#'
+#' @inheritParams scales::show_col
+#' @return
+#' @export
+#'
+#' @examples
+#'
+show_colors <- scales::show_col
+
+
+#' revert vector's levels
+#'
+#' @param x a vector
+#' @param levels relevel x using `levels`
+#'
+#' @return updated x with levels reverted
+#' @export
+#'
+#' @examples
+#'
+revLevels <- function(x, levels = NULL){
+  if(is.null(levels)) levels <- rev(sort(unique(x)))
+  return(factor(x, levels = levels))
+}
+

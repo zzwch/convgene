@@ -137,8 +137,8 @@ pl_slingshot <- function(object, ggplot, color_by = "ss_lineage", pt.size = 1){
 #' @param meta_data a data.frame including x, y, group_by
 #' @param x colname of meta_data
 #' @param y colname of meta_data
-#' @param group_by color the points  by which vector
-#' @param groups subset data to show only those points belonging to groups of group_by
+#' @param group_by identical to point_group_by
+#' @param groups identical to groups
 #' @param show_points show geom_point
 #' @param show_ellipse show stat_ellipse
 #' @param ellipse_level set ellipse area level
@@ -146,12 +146,18 @@ pl_slingshot <- function(object, ggplot, color_by = "ss_lineage", pt.size = 1){
 #' @param ellipse_color ellipse aes, a color
 #' @param show_center show mean point
 #' @param center_method function used to calc mean center
-#' @param colors modify the point colors
-#' @param shape_by point aes, a value or colname of meta_data
-#' @param size_by point aes, a value or colname of meta_data
 #' @param center_size center point aes, a value
 #' @param center_shape center point aes, a value
 #' @param center_alpha center point aes, a value
+#' @param colors modify the point colors
+#' @param point_group_by color the points by which vector
+#' @param point_groups subset data to show only those points belonging to groups of group_by
+#' @param point_shape_by point aes, a value or colname of meta_data
+#' @param point_size_by point aes, a value or colname of meta_data
+#' @param ellipse_group_by calc ellipse by which vector
+#' @param ellipse_groups subset data to calc ellipse for only those points belonging to groups of group_by
+#' @param center_group_by calc center by which vector
+#' @param center_groups subset data to calc center for only those points belonging to groups of group_by
 #' @param ... params passed to center_method
 #'
 #' @return a ggplot object
@@ -162,55 +168,99 @@ pl_slingshot <- function(object, ggplot, color_by = "ss_lineage", pt.size = 1){
 #'
 pl_scatterplot <- function(
   meta_data, x, y,
+
+  show_points = T, point_shape_by = NULL, point_size_by = NULL,
   group_by = NULL,
   groups = NULL,
-  show_points = T, shape_by = NULL, size_by = NULL,
+
+  point_group_by = group_by,
+  point_groups = groups,
+
   show_ellipse = F, ellipse_level = 0.5, ellipse_alpha = 0.8, ellipse_color = "white",
+  ellipse_group_by = point_group_by,
+  ellipse_groups = point_groups,
+
   show_center = F, center_method = SummariseExpr,
   center_size = 3, center_shape = 1, center_alpha = 1,
+  center_group_by = ellipse_group_by,
+  center_groups = ellipse_groups,
+
   colors = scanpy_colors$default_64, ...){
 
-  # shape
-  if(IsNULLorNA(shape_by) || (!shape_by[[1]] %in% colnames(meta_data))){
-    meta_data <- SetDefaultAes(meta_data, shape_by, default = "shape", name = "shape")
-    shape_by <- "shape"
+  # POINT
+  point_data <- meta_data
+  ## point shape
+  if(IsNULLorNA(point_shape_by) || (!point_shape_by[[1]] %in% colnames(point_data))){
+    point_data <- SetDefaultAes(point_data, point_shape_by, default = "shape", name = "shape")
+    point_shape_by <- "shape"
   }else{
-    shape_by <- shape_by[[1]]
+    point_shape_by <- point_shape_by[[1]]
   }
-  # size
-  if(IsNULLorNA(size_by) || (!size_by[[1]] %in% colnames(meta_data))){
-    meta_data <- SetDefaultAes(meta_data, size_by, default = "size", name = "size")
-    size_by <- "size"
+  ## point size
+  if(IsNULLorNA(point_size_by) || (!point_size_by[[1]] %in% colnames(point_data))){
+    point_data <- SetDefaultAes(point_data, point_size_by, default = "size", name = "size")
+    point_size_by <- "size"
   }else{
-    size_by <- size_by[[1]]
+    point_size_by <- point_size_by[[1]]
   }
-  # group
-  if(IsNULLorNA(group_by) || (!group_by[[1]] %in% colnames(meta_data))){
-    meta_data <- SetDefaultAes(meta_data, group_by, default = "group", name = "group")
-    group_by <- "group"
+
+  ## point group
+  if(IsNULLorNA(point_group_by) || (!point_group_by[[1]] %in% colnames(point_data))){
+    point_data <- SetDefaultAes(point_data, point_group_by, default = "group", name = "group")
+    point_group_by <- "group"
   }else{
-    group_by <- group_by[[1]]
-    if(!IsNULLorNA(groups)){
-      meta_data <- subset(meta_data, meta_data[,group_by] %in% groups)
+    point_group_by <- point_group_by[[1]]
+    if(!IsNULLorNA(point_groups)){
+      point_data <- subset(point_data, point_data[,point_group_by] %in% point_groups)
     }
   }
 
-  p <- ggplot(data = meta_data)
+
+
+  # ELLIPSE
+  ellipse_data <- meta_data
+  ## ellipse group
+  if(IsNULLorNA(ellipse_group_by) || (!ellipse_group_by[[1]] %in% colnames(ellipse_data))){
+    ellipse_data <- SetDefaultAes(ellipse_data, ellipse_group_by, default = "group", name = "group")
+    ellipse_group_by <- "group"
+  }else{
+    ellipse_group_by <- ellipse_group_by[[1]]
+    if(!IsNULLorNA(ellipse_groups)){
+      ellipse_data <- subset(ellipse_data, ellipse_data[,ellipse_group_by] %in% ellipse_groups)
+    }
+  }
+
+  # CENTER
+  center_data <- meta_data
+  ## center group
+  if(IsNULLorNA(center_group_by) || (!center_group_by[[1]] %in% colnames(center_data))){
+    center_data <- SetDefaultAes(center_data, center_group_by, default = "group", name = "group")
+    center_group_by <- "group"
+  }else{
+    center_group_by <- center_group_by[[1]]
+    if(!IsNULLorNA(center_groups)){
+      center_data <- subset(center_data, center_data[,center_group_by] %in% center_groups)
+    }
+  }
+
+  p <- ggplot()
   # POINT
   if(show_points){
     p <- p + geom_point(mapping = aes_(x = as.name(x),
                                       y = as.name(y),
-                                      color = as.name(group_by),
-                                      shape = as.name(shape_by),
-                                      size = as.name(size_by))
+                                      color = as.name(point_group_by),
+                                      shape = as.name(point_shape_by),
+                                      size = as.name(point_size_by)),
+                        data = point_data
                         )
   }
   # ELLIPSE
   if(show_ellipse){
     p <- p + stat_ellipse(mapping = aes_(x = as.name(x),
                                         y = as.name(y),
-                                        fill = as.name(group_by),
-                                        group = as.name(group_by)),
+                                        fill = as.name(ellipse_group_by),
+                                        group = as.name(ellipse_group_by)),
+                          data = ellipse_data,
                           color = ellipse_color,
                           size = 1,
                           geom = "polygon",
@@ -219,18 +269,18 @@ pl_scatterplot <- function(
   }
 
   if(show_center){
-    meanData <- as.data.frame(apply(meta_data[,c(x,y)], 2, function(x) {
-      tapply(x , list(meta_data[[group_by]]), function(y){
+    meanData <- as.data.frame(apply(center_data[,c(x,y)], 2, function(x) {
+      tapply(x , list(center_data[[center_group_by]]), function(y){
         center_method(y, by_log = T, ...)
       })
     }))
 
-    meanData[,group_by] <- rownames(meanData)
+    meanData[,center_group_by] <- rownames(meanData)
 
     p <- p + geom_point(data = meanData,
                         mapping = aes_(x = as.name(x),
                                       y = as.name(y),
-                                      color = as.name(group_by)),
+                                      color = as.name(center_group_by)),
                alpha = center_alpha,
                shape = center_shape,
                size = center_size)
@@ -356,6 +406,7 @@ pl_dotplot <- function(
 #' @param meta_data data.frame
 #' @param x a string in colnames of meta_data, to be mapped as x-axis
 #' @param y a string in colnames of meta_data, to be mapped as y-axis
+#' @param fill_by a string in colnames of meta_data
 #' @param fill_colors fill colors of violins
 #' @param box_color border color of boxplot
 #' @param box_fill_color fill color of boxplot
@@ -370,13 +421,14 @@ pl_vioboxplot <- function(
   meta_data,
   x,
   y,
+  fill_by = x,
   fill_colors = NULL,
   box_color = "black",
   box_fill_color = "white"){
 
-  if(class(meta_data) == "Seurat") meta_data <- FetchData(meta_data, vars = c(x, y))
+  if(class(meta_data) == "Seurat") meta_data <- FetchData(meta_data, vars = c(x, y, fill_by))
   p <- ggplot(meta_data, mapping = aes_string(x,y)) +
-    geom_violin(mapping = aes_string(fill = x),
+    geom_violin(mapping = aes_string(fill = fill_by),
                 show.legend = F,
                 color= NA,
                 scale = "width") +
@@ -603,12 +655,14 @@ pl_dimplot <- function(object, group_by, shape_by = NULL, ncol = 2, slot = "data
                            id.vars = c(dims, shape_by),
                            measure.vars = group_by,
                            variable.name = "group_by",
-                           value.name = "value")
+                           value.name = "value",
+                           factorsAsStrings = F)
   ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, c(group_by, shape_by), slot = slot), embeddings)[subset_cells,],
                             id.vars = c(dims, shape_by),
                             measure.vars = group_by,
                             variable.name = "group_by",
-                            value.name = "value")
+                            value.name = "value",
+                            factorsAsStrings = F)
 
   if(!is.null(subset_cells)){
     p <- ggplot() +
@@ -772,5 +826,156 @@ pl_splitDimplot <- function(object, reduction = "umap",
           coord_fixed(coord_fixed_ratio)
       )
     }
+  }
+}
+
+
+#' visualize genes patterns heatmap using kmeans clustering
+#'
+#' @param mat gene x cell expression matrix. cell order is kept for heatmap.
+#' @param genes_select genes to be display
+#' @param cellAnnot cell annotation data frame
+#' @param geneAnnot gene annotation, used for annotation bar in heatmap.
+#' @param cluster_colname which column to be used for group
+#' @param clusters_display subset clusters to be displayed
+#' @param clusters_stat subset clusters to be used for filtering genes by statistical test
+#' @param filter_gene_by_stat whether to do filter gene
+#' @param stat_pvalue threshold for filtering genes
+#' @param stat_padj threshold for filtering genes. both pvalue and padjust will be fullfilment.
+#' @param do_gene_kmeans use kmeans to determine gene order
+#' @param kmeans_k k parameter in kmeans
+#' @param kmeans_seed random seeds for kmeans
+#' @param gene_scale do gene-wise scale for display
+#' @param min cap the scaled value
+#' @param max cap the scaled value
+#' @param display_gaps do \code{gaps_row} and \code{gaps_col} of pheatmap
+#' @param ... parameters used in pheatmap
+#' @param return_data return mat and kmeans results
+#'
+#' @return pheatmap plot
+#' @export
+#'
+#' @examples
+#'
+pl_genePatternHeatmap <- function(
+  mat, genes_select, cellAnnot, geneAnnot,
+  cluster_colname = "identity",
+  clusters_display,
+  clusters_stat = NULL,
+  filter_gene_by_stat = F, stat_pvalue = 0.05, stat_padj = 1,
+  do_gene_kmeans = T, kmeans_k = 10, kmeans_seed = 1,
+  gene_scale = T, min = -2, max = 2,
+  display_gaps= c("row", "col"),
+  return_data = F,
+  ...
+){
+  # cell order
+  cellAnnot <- cellAnnot[colnames(mat), ] # keep column order of mat as is which will be displayed in heatmap
+
+  # gene
+  genes_notin <- paste0(setdiff(genes_select, rownames(mat)), collapse = "," )
+  genes_select <- intersect(genes_select, rownames(mat))
+  if(genes_notin != "") message(stringr::str_glue("NOT-IN-DATA: {genes_notin}"))
+
+  # filter by stat
+  if(is.null(clusters_stat)) clusters_stat <- clusters_display
+  cellAnnot_stat <- cellAnnot[cellAnnot[[cluster_colname]] %in% clusters_stat, ]
+  mat_stat <- mat[genes_select, rownames(cellAnnot_stat), drop = F]
+  if(filter_gene_by_stat){
+    gene_pvalue <- apply(mat_stat, 1, function(x){
+      kruskal.test(x, cellAnnot_stat[[cluster_colname]])$p.value}) %>%
+      sort()
+    gene_padj <- p.adjust(gene_pvalue)
+    genes_select <- names(gene_pvalue)[gene_pvalue <= stat_pvalue & gene_padj <= stat_padj]
+  }
+
+  #
+  cellAnnot <- cellAnnot[cellAnnot[[cluster_colname]] %in% clusters_display, ]
+  geneAnnot <- geneAnnot[genes_select,,drop = F]
+  mat <- mat[genes_select, rownames(cellAnnot), drop = F]
+
+  if(gene_scale){
+    phMat <- t(MinMax(scale(t(mat)), min, max))
+  }
+
+  # kmeans
+  if(do_gene_kmeans){
+    set.seed(kmeans_seed)
+    phk <- kmeans(
+      # apply(phMat, 1, function(x)
+      #   tapply(x,
+      #          INDEX = cellAnnot[[cluster_colname]] %>% droplevels,
+      #          FUN = mean)
+      # ) %>% t,
+      phMat,
+      centers = kmeans_k)
+
+    phk_hc <- hclust(((1- (phk$centers %>% t %>% cor))/2) %>% as.dist())
+
+    geneAnnot[names(phk$cluster), "kmean"] <- plyr::mapvalues(
+      phk$cluster,
+      sort(unique(phk$cluster)),
+      phk_hc$order %>% order)
+    phMat <- phMat[geneAnnot$kmean %>% order,]
+    gaps_genes <- table(geneAnnot$kmean) %>% cumsum()
+  }
+
+  gaps_cells <- table(cellAnnot[[cluster_colname]] %>% droplevels()) %>% cumsum()
+  # heatmap
+  if(return_data){
+    pheatmap::pheatmap(
+      phMat,
+      annotation_col = cellAnnot,
+      annotation_row = geneAnnot,
+      gaps_row = if ("row" %in% display_gaps) gaps_genes else NULL,
+      gaps_col = if ("col" %in% display_gaps) gaps_cells else NULL,
+      ...)
+    return(list(phMat = phMat,
+                cellAnnot = cellAnnot,
+                geneAnnot = geneAnnot))
+  }else{
+    pheatmap::pheatmap(
+      phMat,
+      annotation_col = cellAnnot,
+      annotation_row = geneAnnot,
+      gaps_row = if ("row" %in% display_gaps) gaps_genes else NULL,
+      gaps_col = if ("col" %in% display_gaps) gaps_cells else NULL,
+      ...)
+  }
+}
+
+#' Visualize gene expression pattern using boxVlnPlot and smooth line
+#'
+#' @param mat gene x cell matrix
+#' @param cell_group a vector of cells' group corresponding to colnames(mat)
+#' @param gene_group a vector of genes' group corresponding to rownames(mat)
+#' @param return_data if TRUE return summarised data, otherwise return ggplot
+#'
+#' @return ggplot or data.frame
+#' @export
+#'
+#' @examples
+#'
+pl_genePatternDiagram <- function(mat, cell_group, gene_group, ncol = 1, return_data = F){
+  lapply(sort(unique(gene_group)), function(gg){
+    gg_summary <- apply(
+      mat[gene_group == gg, , drop = F],
+      1, function(x) { tapply(x, cell_group %>% droplevels, mean)}) %>% reshape2::melt()
+    colnames(gg_summary) <- c("cluster", "gene", "expression")
+    gg_summary$group <- gg
+
+    return(gg_summary)
+  }) %>% Reduce(f = rbind) -> ggData
+
+  if (return_data) {
+    return(ggData)
+  }else{
+    ggData %>%
+      ggplot(mapping = aes(cluster, expression)) +
+      geom_violin(show.legend = F, scale = "width", mapping = aes(fill = cluster)) +
+      geom_boxplot(show.legend = F, outlier.shape = NA, fill = "white", width = 0.3) +
+      geom_smooth(show.legend = F, mapping = aes(group = group)) +
+      facet_wrap(~group, ncol = ncol, scales = "free_y") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
   }
 }

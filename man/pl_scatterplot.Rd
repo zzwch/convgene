@@ -8,20 +8,26 @@ pl_scatterplot(
   meta_data,
   x,
   y,
+  show_points = T,
+  point_shape_by = NULL,
+  point_size_by = NULL,
   group_by = NULL,
   groups = NULL,
-  show_points = T,
-  shape_by = NULL,
-  size_by = NULL,
+  point_group_by = group_by,
+  point_groups = groups,
   show_ellipse = F,
   ellipse_level = 0.5,
   ellipse_alpha = 0.8,
   ellipse_color = "white",
+  ellipse_group_by = point_group_by,
+  ellipse_groups = point_groups,
   show_center = F,
   center_method = SummariseExpr,
   center_size = 3,
   center_shape = 1,
   center_alpha = 1,
+  center_group_by = ellipse_group_by,
+  center_groups = ellipse_groups,
   colors = scanpy_colors$default_64,
   ...
 )
@@ -33,15 +39,19 @@ pl_scatterplot(
 
 \item{y}{colname of meta_data}
 
-\item{group_by}{color the points  by which vector}
-
-\item{groups}{subset data to show only those points belonging to groups of group_by}
-
 \item{show_points}{show geom_point}
 
-\item{shape_by}{point aes, a value or colname of meta_data}
+\item{point_shape_by}{point aes, a value or colname of meta_data}
 
-\item{size_by}{point aes, a value or colname of meta_data}
+\item{point_size_by}{point aes, a value or colname of meta_data}
+
+\item{group_by}{identical to point_group_by}
+
+\item{groups}{identical to groups}
+
+\item{point_group_by}{color the points by which vector}
+
+\item{point_groups}{subset data to show only those points belonging to groups of group_by}
 
 \item{show_ellipse}{show stat_ellipse}
 
@@ -50,6 +60,10 @@ pl_scatterplot(
 \item{ellipse_alpha}{ellipse aes, a value of 0 to 1}
 
 \item{ellipse_color}{ellipse aes, a color}
+
+\item{ellipse_group_by}{calc ellipse by which vector}
+
+\item{ellipse_groups}{subset data to calc ellipse for only those points belonging to groups of group_by}
 
 \item{show_center}{show mean point}
 
@@ -60,6 +74,10 @@ pl_scatterplot(
 \item{center_shape}{center point aes, a value}
 
 \item{center_alpha}{center point aes, a value}
+
+\item{center_group_by}{calc center by which vector}
+
+\item{center_groups}{subset data to calc center for only those points belonging to groups of group_by}
 
 \item{colors}{modify the point colors}
 

@@ -9,7 +9,7 @@ vectorSmooth(x, n)
 \arguments{
 \item{x}{a vector}
 
-\item{n}{smooth over n items}
+\item{n}{smooth over \code{n} items}
 }
 \value{
 vector
