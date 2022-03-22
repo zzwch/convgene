@@ -10,6 +10,7 @@ pp_preprocess(
   s.features = cc.genes$s.genes,
   g2m.features = cc.genes$g2m.gene,
   do.regress.cc = T,
+  vars.to.regress = NULL,
   do.scale = T,
   pp = c("SCT", "RNA", "centerData"),
   center_by = NULL,
@@ -30,6 +31,8 @@ pp_preprocess(
 \item{g2m.features}{A vector of features associated with G2M phase (CellCycleScoring)}
 
 \item{do.regress.cc}{regress out cell cycle scores (ScaleData)}
+
+\item{vars.to.regress}{other vars to be regressed}
 
 \item{do.scale}{Whether to scale the data. (ScaleData)}
 

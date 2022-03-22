@@ -1,21 +1,90 @@
-
-
-#' normalize UMI matrix to TPM
+#' Converted to R check names
 #'
-#' @param umi umi matrix
-#' @param scale.factor scale factor. default 1e6. recommend the mean of colSums(umi)
-#' @param margin Cells in which margin
+#' R will modify some character of names (such as `-|/ `) to '.',
+#' So for consitency, this function will help to get the checked names
 #'
-#' @return a matrix of tpm values
+#' @param x charaters
+#' @param pattern regular expression, used in `gsub`
+#' @param ... other parameters used in `gsub`
+#'
+#' @return checked characters
 #' @export
 #'
 #' @examples
 #'
-umi2tpm <- function(umi, scale.factor= 1e6, margin = 2){
-  apply(umi, margin, function(x){
-    scale.factor*x/sum(x)
-  })
+toCheckedNames <- function(x, pattern = " |-|/", ...){
+  gsub(pattern, ".", x)
 }
+
+#' Check Function
+#'
+#' @param x a vector
+#' @param strict if strict, duplicated x will result in stop.
+#'
+#' @return deduplicated x
+#' @export
+#'
+#' @examples
+#'
+CheckDuplicate <- function(x, strict = T, rm_dup = T){
+  if(anyDuplicated(x)){
+    if(strict){
+      stop("there are duplicated elements in the vector")
+    }
+    warning("there are duplicated elements in the vector")
+    if(rm_dup){
+      return(x[!duplicated(x)])
+    }
+  }
+  return(x)
+}
+
+
+
+#' Check Feature Duplicate and Not In Data
+#'
+#' @param object data or seurat3 object
+#' @param features features
+#' @param rm_dup remove duplicated elements
+#' @param rm_notin remove features not in data
+#'
+#' @return updated features
+#' @export
+#'
+#' @examples
+#'
+CheckFeatures <- function(object, features, rm_dup = T, rm_notin = T){
+  features <- CheckDuplicate(features, strict = F, rm_dup = rm_dup)
+  features_ <- setdiff(features, rownames(object))
+  if(length(features_) > 0){
+    Message("NOT-IN-DATA: ",features_, ", ")
+    if(rm_notin){
+      features <- features[!features %in% features_]
+    }
+  }
+  return(features)
+}
+
+#' Check pal in brewer
+#'
+#' @param pal a string of names of brewer.pal, or a vector of colors to be used to produce n gradient colors.
+#' @param n length of returned color vector
+#'
+#' @return a vector of colors
+#' @export
+#'
+#' @examples
+#'
+CheckBrewerPal <- function(pal = "YlGn", n = 5){
+  if(pal %in% rownames(RColorBrewer::brewer.pal.info)){
+    colours <-  c(RColorBrewer::brewer.pal(name = pal, n = n))
+  }else{
+    colours <- grDevices::colorRampPalette(pal)(n)
+  }
+  return(colours)
+}
+
+
 
 #' convert genes symbols between organisms
 #'
@@ -26,6 +95,8 @@ umi2tpm <- function(umi, scale.factor= 1e6, margin = 2){
 #' @param orgA from which organism, now human, mouse, macaque are supported
 #' @param orgB to which organism, now human, mouse, macaque are supported
 #' @param verbose report information
+#' @param attrA attributes for orgA. default: hgnc_symbol, mgi_symbol or external_gene_name for human, mouse, macaque, respectively.
+#' @param attrB atrributes for orgB [eg. listAttributes()]
 #'
 #' @return data.frame of genes' mapping
 #' @import biomaRt
@@ -44,23 +115,26 @@ ConvertHomoGene <- function(
   genes,
   orgA = "human",
   orgB = "mouse",
+  attrA = NULL,
+  attrB = NULL,
   verbose = F
   ){
 
   orgDict <- list(
     human = c(dataset = "hsapiens_gene_ensembl",
-              attr_prefix = "hgnc_"),
+              attr = "hgnc_symbol"),
     mouse = c(dataset = "mmusculus_gene_ensembl",
-              attr_prefix = "mgi_"),
+              attr = "mgi_symbol"),
     macaque = c(dataset = "mmulatta_gene_ensembl",
-                attr_prefix = "hgnc_")
+                attr = "external_gene_name")
   )
   orgA <- orgDict[[orgA]]
   orgB <- orgDict[[orgB]]
   martA = useMart("ensembl", dataset = orgA["dataset"])
   martB = useMart("ensembl", dataset = orgB["dataset"])
-  attrA <- paste0(orgA["attr_prefix"], "symbol")
-  attrB <- paste0(orgB["attr_prefix"], "symbol")
+
+  if(is.null(attrA)) attrA <- orgA["attr"]
+  if(is.null(attrB)) attrB <- orgB["attr"]
 
   geneMap = getLDS(attributes = attrA, filters = attrA,
                    values = genes, mart = martA,
@@ -72,7 +146,7 @@ ConvertHomoGene <- function(
       message("All genes were translated successfully!")
     }else{
       warning(str_c(length(setdiff(genes, geneMap[,1])),
-                    "genes could not be converted. You can use setdiff function to see them."))
+                    " genes could not be converted. You can use setdiff function to see them."))
     }
   }
   return(geneMap)
@@ -163,6 +237,129 @@ homoMSigDB <- function(files = NULL, organism = "mouse", use.entrez = F, use.bio
   return()
 }
 
+
+
+#' Add prefix and/or suffix for file name
+#'
+#' @param file_name file name to be added
+#' @param prefix prefix character
+#' @param suffix suffix character
+#' @param sep split file name by sep into multiple parts
+#' @param index add prefix to the index part. if <= 0, reverse order is used, then 0 is the last one and -1 is the last but one.
+#'
+#' @return new file name
+#' @export
+#'
+#' @examples
+#' presuf_file_name("./database/msigdb.gmt", "homo_")
+#' # "./database/homo_msigdb.gmt"
+#'
+presuf_file_name <- function(file_name, prefix = NULL, suffix = NULL, sep = ".", index = 1){
+  dir <- dirname(file_name)
+  base <- basename(file_name)
+  base.split <- strsplit(base, split = sep, fixed = T)[[1]]
+  if(index <= 0){
+    index <- length(base.split) + index
+  }
+  base.split[index] <- paste0(prefix, base.split[index], suffix)
+  file.path(dir, paste(base.split, collapse = sep))
+}
+
+
+#' Gene Set Enrichment Analysis of KEGG
+#'
+#' @inheritParams clusterProfiler::gseKEGG
+#' @param keyType one of "kegg", 'ncbi-geneid', 'ncib-proteinid' and 'uniprot'. For hsa and mmu, "symbol" is also supported.
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#'
+gseKEGG_symbol <- function(
+  geneList,
+  organism = "hsa",
+  keyType = "symbol",
+  exponent = 1,
+  nPerm = 1000,
+  minGSSize = 10,
+  maxGSSize = 500,
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  verbose = TRUE,
+  use_internal_data = FALSE,
+  seed = FALSE,
+  by = "fgsea"
+){
+  if(keyType == "symbol"){
+    keyMap <- NULL
+    if(organism == "hsa")  keyMap <- clusterProfiler::bitr(names(geneList) %>% unique(), "SYMBOL", "ENTREZID", org.Hs.eg.db::org.Hs.eg.db)
+    if(organism == "mmu")  keyMap <- clusterProfiler::bitr(names(geneList) %>% unique(), "SYMBOL", "ENTREZID", org.Mm.eg.db::org.Mm.eg.db)
+    if(is.null(keyMap)) stop("Unsupported org!")
+
+    genes <- keyMap$ENTREZID[match(names(geneList), keyMap$SYMBOL)]
+
+    geneList <- geneList[!is.na(genes)]
+    genes <- genes[!is.na(genes)]
+
+    genes_ind <- !duplicated(genes)
+    geneList <- geneList[genes_ind]
+    names(geneList) <- genes[genes_ind]
+  }
+
+  clusterProfiler::gseKEGG(
+    geneList,
+    organism,
+    keyType,
+    exponent,
+    nPerm,
+    minGSSize,
+    maxGSSize,
+    pvalueCutoff,
+    pAdjustMethod,
+    verbose,
+    use_internal_data,
+    seed,
+    by
+  )
+}
+
+#' download updated KEGG Pathways
+#'
+#' @param org supported organism, can be search using clusterProfiler::search_kegg_organism function
+#' @param symbol return gene symbol
+#' @param gmt return as gmt format. Use write.gmt to export to file.
+#'
+#' @return kegg terms
+#' @export
+#'
+#' @examples
+#'
+retrieveKEGG <- function(
+  org = c("hsa", "mmu"),
+  symbol = TRUE,
+  gmt = TRUE
+){
+  kegg <- clusterProfiler::download_KEGG(org)
+  if(symbol){
+    keyMap <- NULL
+    if(org == "hsa")  keyMap <- clusterProfiler::bitr(kegg$KEGGPATHID2EXTID$to %>% unique(), "ENTREZID", "SYMBOL", org.Hs.eg.db::org.Hs.eg.db)
+    if(org == "mmu")  keyMap <- clusterProfiler::bitr(kegg$KEGGPATHID2EXTID$to %>% unique(), "ENTREZID", "SYMBOL", org.Mm.eg.db::org.Mm.eg.db)
+    if(is.null(keyMap)) stop("Unsupported org!")
+
+    kegg$KEGGPATHID2EXTID$to <- keyMap$SYMBOL[match(kegg$KEGGPATHID2EXTID$to, keyMap$ENTREZID)]
+    kegg$KEGGPATHID2EXTID <- na.omit(kegg$KEGGPATHID2EXTID)
+  }
+
+  if(gmt){
+    desc.list <- setNames(kegg$KEGGPATHID2NAME$to %>% as.character(), kegg$KEGGPATHID2NAME$from)
+    gmt.list <- split(kegg$KEGGPATHID2EXTID$to, kegg$KEGGPATHID2EXTID$from)
+    return(list(genesets = gmt.list, description = desc.list))
+  }else{
+    return(kegg)
+  }
+}
+
 #' Read gmt file
 #'
 #' @param gmtfile file name
@@ -203,31 +400,6 @@ write.gmt <- function(gmt.list = NULL, desc.list = NULL, gmtfile = NULL){
   return()
 }
 
-#' Add prefix and/or suffix for file name
-#'
-#' @param file_name file name to be added
-#' @param prefix prefix character
-#' @param suffix suffix character
-#' @param sep split file name by sep into multiple parts
-#' @param index add prefix to the index part. if <= 0, reverse order is used, then 0 is the last one and -1 is the last but one.
-#'
-#' @return new file name
-#' @export
-#'
-#' @examples
-#' presuf_file_name("./database/msigdb.gmt", "homo_")
-#' # "./database/homo_msigdb.gmt"
-#'
-presuf_file_name <- function(file_name, prefix = NULL, suffix = NULL, sep = ".", index = 1){
-  dir <- dirname(file_name)
-  base <- basename(file_name)
-  base.split <- strsplit(base, split = sep, fixed = T)[[1]]
-  if(index <= 0){
-    index <- length(base.split) + index
-  }
-  base.split[index] <- paste0(prefix, base.split[index], suffix)
-  file.path(dir, paste(base.split, collapse = sep))
-}
 
 #' similar to scales::rescale but use quantile 95
 #'
@@ -457,73 +629,6 @@ SummariseExpr <- function(
   }
 }
 
-#' Check Function
-#'
-#' @param x a vector
-#' @param strict if strict, duplicated x will result in stop.
-#'
-#' @return deduplicated x
-#' @export
-#'
-#' @examples
-#'
-CheckDuplicate <- function(x, strict = T, rm_dup = T){
-  if(anyDuplicated(x)){
-    if(strict){
-      stop("there are duplicated elements in the vector")
-    }
-    warning("there are duplicated elements in the vector")
-    if(rm_dup){
-      return(x[!duplicated(x)])
-    }
-  }
-  return(x)
-}
-
-
-
-#' Check Feature Duplicate and Not In Data
-#'
-#' @param object data or seurat3 object
-#' @param features features
-#' @param rm_dup remove duplicated elements
-#' @param rm_notin remove features not in data
-#'
-#' @return updated features
-#' @export
-#'
-#' @examples
-#'
-CheckFeatures <- function(object, features, rm_dup = T, rm_notin = T){
-  features <- CheckDuplicate(features, strict = F, rm_dup = rm_dup)
-  features_ <- setdiff(features, rownames(object))
-  if(length(features_) > 0){
-    Message("NOT-IN-DATA: ",features_, ", ")
-    if(rm_notin){
-      features <- features[!features %in% features_]
-    }
-  }
-  return(features)
-}
-
-#' Check pal in brewer
-#'
-#' @param pal a string of names of brewer.pal, or a vector of colors to be used to produce n gradient colors.
-#' @param n length of returned color vector
-#'
-#' @return a vector of colors
-#' @export
-#'
-#' @examples
-#'
-CheckBrewerPal <- function(pal = "YlGn", n = 5){
-  if(pal %in% rownames(RColorBrewer::brewer.pal.info)){
-    colours <-  c(RColorBrewer::brewer.pal(name = pal, n = n))
-  }else{
-    colours <- grDevices::colorRampPalette(pal)(n)
-  }
-  return(colours)
-}
 
 
 #' Correct sign by correlation
@@ -658,6 +763,145 @@ inferUMI <- function(data, base = exp(1)){
 
   hist(colSums(umi))
   return(umi)
+}
+
+
+#' EM Algorithm for Mixtures of Univariate Normals
+#'
+#' A wrapper of mixtools::normalmixEM with prediction by posterior probability
+#'
+#' @param x A vector of length n consisting of the data.
+#' @param posterior threshold of posterior probability. Default: 0.5
+#' @param ... othter parameters passed to mixtools::normalmixEM
+#'
+#' @return  a list of class mixEM defined in mixtools::normalmixEM and items:
+#' predict: a vector of predicted class
+#' threshold: a value
+#'
+#' @export
+#'
+#' @examples
+#'
+inferNormalMixTh <- function(x, posterior = 0.5, ...){
+  ret <- mixtools::normalmixEM(x, ...)
+  ret$predict <- apply(ret$posterior > posterior, 1, which)
+  # get threshold
+  th_tmp <- tapply(x, ret$predict, quantile, probs = c(0.025, 0.975)) %>% unlist %>% sort
+  th_n <- length(th_tmp)/2 - 1
+  ret$threshold <- (th_tmp[seq(th_n)*2] + th_tmp[seq(th_n)*2+1])/2
+  return(ret)
+}
+
+
+#' Shannon entropy for distribution P
+#'
+#' @param p a discrete distribution, whose elements should sum up to 1.
+#' Elements less than 0 will be ignored, and all elements will be forced to be normalized to sum 1 (p/sum(p)).
+#' @param unit log, log2, log10 used in calculation of Shannon entropy
+#'
+#' @return Shannon entropy value: sum(-p*log(p))
+#' @export
+#'
+#' @examples
+#'
+H <- function(p, unit = log2) {
+  p[p<0] <- 0
+  p <- prop.table(p)
+  return(sum(-p * unit(p)))
+}
+
+
+#' Jensen-Shannon Divergence
+#'
+#' Jensen–Shannon divergence is a method of measuring the similarity between two probability distributions.
+#'
+#' @param m matrix-like object, with a discrete distribution in each column
+#' @param pseudocount m's elements less than zero will be forced to be zero, and m = m + pseudocount to avoid zero in the numerator and/or denominator.
+#' @param unit log, log2, log10 used in calculation of Shannon entropy
+#'
+#' @return Jensen Shanonn Divergence
+#' @export
+#'
+#' @examples
+#' # p & q are distributions so their elements should sum up to 1
+#' p <- c(0.00029421, 0.42837957, 0.1371827, 0.00029419, 0.00029419,
+#'        0.40526004, 0.02741252, 0.00029422, 0.00029417, 0.00029418)
+#' q <- c(0.00476199, 0.004762, 0.004762, 0.00476202, 0.95714168,
+#'        0.00476213, 0.00476212, 0.00476202, 0.00476202, 0.00476202)
+#' JSD2(p,q)
+#' H((p+q)/2)-(H(p) + H(q))/2
+#' @details
+#' for more, see
+#' https://enterotype.embl.de/enterotypes.html
+#' https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence
+#' https://stackoverflow.com/questions/11226627/jensen-shannon-divergence-in-r
+#'
+JSD <- function(m, pseudocount=1e-6, unit = log2) {
+  m[m < 0] <- 0
+  m <- prop.table(m+pseudocount, 2)
+  w <- rep(1/ncol(m), ncol(m))
+  return(H(m %*% w, unit) - apply(m, 2, H, unit = unit) %*% w)
+}
+
+#' JSD for two vector
+#'
+#' @param p a discrete distribution
+#' @param q a discrete distribution
+#' @param pseudocount in case of elements of zero
+#' @param unit log, log2, log10 used in calculation of Shannon entropy
+#'
+#' @return Jensen Shanonn Divergence
+#' @export
+#'
+#' @examples
+#'
+JSD2 <- function(p, q, pseudocount = 1e-16, unit = log2){
+  JSD(cbind(p,q), pseudocount, unit)
+}
+
+#' Group specific distance
+#'
+#' @param data a matrix, for example, gene expression, regulon scores ...
+#' @param group a category vector
+#' @param unit log, log2, log10 used in calculation of Shannon entropy
+#'
+#' @return
+#' Similarity data for each feature (row in data) and each category (group);
+#' divergence: Jensen Shanonn Divergence;
+#' distance: sqrt(divergence);
+#' specificity: specificity score;
+#' group: group with max specificity score;
+#'
+#' @export
+#'
+#' @examples
+#' # for cell-type specific score
+#' data <- matrix(1:100, 10)
+#' group = sample(1:3, 10, replace = T)
+#' JSD_group(data, group)
+#'
+JSD_group <- function(data, group, unit = log2){
+  cat <- unique(group) %>% sort() %>% as.character()
+  js <- sapply(cat, function(x){
+    apply(data, 1, JSD2, q = as.numeric(group == x), unit = unit)
+  })
+  dist <- sqrt(js)
+  sp <- 1 - dist
+  sg <- apply(sp, 1, function(x){
+    xs <- sort(x, decreasing = T)
+    c(group = colnames(js)[which.max(x)],
+      max = max(x),
+      diff_second = xs[1]-xs[2],
+      min = min(x))
+  }) %>% t
+  colnames(sg) <- c("group", "max", "diff_second", "min")
+
+  return(list(
+    divergence = js,
+    distance = dist,
+    specificity = sp,
+    group = sg
+  ))
 }
 
 
@@ -798,6 +1042,24 @@ write_clip <- function(content, quoted = T, ...){
 }
 
 
+#' Regression based smoothened line prediction
+#'
+#' @param x independent variable, numeric vector
+#' @param y dependent variable, numeric vector
+#' @param method Smoothing function, see ggplot2::geom_smooth
+#' @param formula Formula to use in smoothing function, eg. y ~ x, y ~ poly(x, 2), y ~ log(x).
+#' @param span Controls the amount of smoothing for the default loess smoother.
+#' @param ... other parameters used in `method` function
+#'
+#' @return data.frame of fit and se.fit?
+#' @export
+#'
+#' @examples
+#'
+regressionSmoothen <- function(x, y, method = stats::loess, formula = y~x, span = 0.75, ...){
+  predict(stats::loess(formula, data.frame(x = x, y = y), span = span, ...), x, se = T)[c(1,2)] %>% as.data.frame()
+}
+
 #' load saved RData
 #'
 #' A wrapper function of base::load
@@ -921,6 +1183,17 @@ list2df <- function(x){
   })))
 }
 
+#' to list
+#'
+#' A alias function of base::split
+#'
+#' @inheritParams base::split
+#' @return
+#' @export
+#'
+#' @examples
+#'
+df2list <- base::split
 
 #' set calculations
 #'
@@ -1029,24 +1302,28 @@ getMGIHomoGeneTable <- function(
 #' @param keys colnames of \code{df} as key to search
 #' @param select colname(s) to return
 #' @param return.key whether to return keys
+#' @param collapse collapse keys
+#' @param drop usefull when return vector
 #'
 #' @return vector or data.frame
 #' @export
 #'
 #' @examples
 #'
-vlookup <- function(df, x, keys = 1, select = NULL, collapse = "_", return.key = FALSE){
+vlookup <- function(df, x, keys = 1, select = NULL, collapse = "_", return.key = FALSE, drop = F){
   if(is.null(select)) {
     select <- colnames(df)
   }
 
   if(length(keys) > 1) {
+    x <- apply(x, 2, function(y) trimws(as.character(y)))
     x <- apply(x, 1, paste, collapse = collapse)
-    df$key_collapsed <- apply(df[,keys], 1, paste, collapse = collapse)
+    df_keys <- apply(df[,keys], 2, function(y) trimws(as.character(y)))
+    df$key_collapsed <- apply(df_keys, 1, paste, collapse = collapse)
     keys <- "key_collapsed"
   }
 
-  ret <- df[match(x, df[,keys]), select, drop = F]
+  ret <- df[match(x, df[,keys,drop = T]), select, drop = drop]
   if(return.key) ret <- cbind(x = x, ret)
 
   return(ret)
@@ -1065,7 +1342,7 @@ vlookup <- function(df, x, keys = 1, select = NULL, collapse = "_", return.key =
 #' @examples
 #'
 calcLogMean <- function(x, log.base = exp(1), return.log = T){
-  m <- mean(log.base^x)
+  m <- mean(log.base^x, na.rm = T)
   if(return.log) m <- log(m)/log(log.base)
   return(m)
 }
@@ -1123,6 +1400,22 @@ pmultinom_sample <- function(prob, k = length(prob), n.max = 100, B = 1000, seed
   return(res_p)
 }
 
+#' normalize UMI matrix to TPM
+#'
+#' @param umi umi matrix
+#' @param scale.factor scale factor. default 1e6. recommend the mean of colSums(umi)
+#' @param margin Cells in which margin
+#'
+#' @return a matrix of tpm values
+#' @export
+#'
+#' @examples
+#'
+umi2tpm <- function(umi, scale.factor= 1e6, margin = 2){
+  apply(umi, margin, function(x){
+    scale.factor*x/sum(x)
+  })
+}
 
 #' unlist by n times
 #'
@@ -1212,15 +1505,45 @@ setLevels <- function(df, x, levels){
 
 #' Show colours
 #'
-#' A alias function for scales::show_col
+#' Modified from scales::show_col
 #'
 #' @inheritParams scales::show_col
+#' @param label_names show names of colours instead of hexadecimal representation
 #' @return
 #' @export
 #'
 #' @examples
 #'
-show_colors <- scales::show_col
+show_colors <- function(colours, labels = TRUE, borders = NULL, cex_label = 1, label_names = FALSE){
+
+  if (label_names) {
+    color_names <- names(colours)
+  }else{
+    color_names <- colours
+  }
+
+  n <- length(colours)
+  ncol <- ceiling(sqrt(n))
+  nrow <- ceiling(n/ncol)
+  colours <- c(colours, rep(NA, nrow * ncol - length(colours)))
+  colours <- matrix(colours, ncol = ncol, byrow = TRUE)
+  old <- par(pty = "s", mar = c(0, 0, 0, 0))
+  on.exit(par(old))
+  size <- max(dim(colours))
+  plot(c(0, size), c(0, -size), type = "n", xlab = "",
+       ylab = "", axes = FALSE)
+  rect(col(colours) - 1, -row(colours) + 1, col(colours), -row(colours),
+       col = colours, border = borders)
+  if (labels) {
+    hcl <- farver::decode_colour(colours, "rgb", "hcl")
+    label_col <- ifelse(hcl[, "l"] > 50, "black",
+                        "white")
+    text(col(colours) - 0.5, -row(colours) + 0.5,
+         matrix(c(color_names, rep(NA, nrow * ncol - length(color_names))),
+                ncol = ncol, byrow = TRUE),
+         cex = cex_label, col = label_col)
+  }
+}
 
 
 #' revert vector's levels
@@ -1237,4 +1560,115 @@ revLevels <- function(x, levels = NULL){
   if(is.null(levels)) levels <- rev(sort(unique(x)))
   return(factor(x, levels = levels))
 }
+
+
+#' Length of Unique values
+#'
+#' @inheritParams base::unique
+#' @param ... other arguments passed to unique
+#'
+#' @return numeric
+#' @export
+#'
+#' @examples
+#'
+uniq_len <- function(x, ...) {
+  length(unique(x = x, ...))
+}
+
+
+#' Ro/e score analysis
+#'
+#' @param tab table or matrix
+#' @param ... other params passed to chisq.test
+#'
+#' @return Ro/e
+#' @export
+#'
+#' @examples
+#'
+chiseq_roe <- function(tab, ...){
+  chi <- chisq.test(tab, ...)
+  chi$observed/chi$expected
+}
+
+
+#' sampling cells by clusters
+#'
+#' @param cells vector
+#' @param clusters vector
+#' @param n sampling number of cells
+#' @param seed random seed
+#' @param unlist return list or not
+#'
+#' @return subset of cells
+#' @export
+#'
+#' @examples
+#'
+sample_cluster_cells <- function(cells, clusters, n = 60, seed = 666, unlist = F){
+  cl <- unique(clusters)
+  set.seed(seed)
+  ret <- lapply(cl, function(x){
+    if(n >= sum(clusters == x)) return(cells[clusters == x])
+    sample(cells[clusters == x], size = n, replace = F)
+  })
+  if(unlist) ret <- unlist(ret)
+  return(ret)
+}
+
+
+#' read multiple h5 files into one seurat object
+#'
+#' @param filenames files with full path
+#' @param filemeta a named list of several vectors to be used as meta.data. list name as colnames, length of each vector should be equal to length of `filenames`
+#' @inheritParams Seurat::Read10x_h5
+#'
+#' @return seurat object
+#' @export
+#'
+#' @examples
+#'
+h5sToSeurat <- function(filenames, filemeta, use.names = TRUE, unique.features = TRUE) {
+  meta_colnames <- names(filemeta)
+  seu_list <- lapply(
+    seq_along(filenames),
+    function(i) {
+      h5_i <- Seurat::Read10X_h5(filename = filenames[i],
+                                 use.names = use.names,
+                                 unique.features = unique.features)
+      #init
+      meta.data <- data.frame(row.names = colnames(h5_i))
+      for(j in meta_colnames){
+        meta.data %<>% mutate({{j}} := filemeta[[j]][i])
+        #         meta.data %<>% mutate({{j}} = filemeta[[j]][i])
+      }
+      # recover
+      rownames(meta.data) <- colnames(h5_i)
+
+      CreateSeuratObject(h5_i, meta.data = meta.data)
+
+    }
+  )
+  mergeSeuratList(seu_list)
+}
+
+
+#' merge seurat list
+#'
+#' @param object_list a list of seurat objects
+#' @param genes_used if NULL use their shared genes
+#'
+#' @return one seurat object
+#' @export
+#'
+#' @examples
+#'
+mergeSeuratList <- function(object_list, genes_used = NULL){
+  if(is.null(genes_used)){
+    genes_used <- Reduce(intersect, lapply(object_list, rownames))
+  }
+  merge(object_list[[1]], object_list[-1])[genes_used, ]
+}
+
 

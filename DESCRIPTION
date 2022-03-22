@@ -15,7 +15,8 @@ Imports:
     ggplot2,
     RColorBrewer,
     pheatmap,
-    reshape2
+    reshape2,
+    reticulate
 RoxygenNote: 7.1.1
 Suggests: 
     testthat,

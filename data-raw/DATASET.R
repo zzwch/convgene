@@ -1,4 +1,13 @@
 ## code to prepare `DATASET` dataset goes here
+require(magrittr)
+require(tidyverse)
+# Atlas of human Blood Cells
+curated_markers <- list()
+abc_markers_human <- read.table(
+  file = "data-raw/MarkerGene_Atlas of Human Blood cells.txt",
+  header = T, sep = "\t")
+
+curated_markers$ABC_human <- abc_markers_human
 
 # mSTRT barcodes
 strt96barcodes <- read.csv(file = "data-raw/96-8bp-barcode.csv")
@@ -69,5 +78,5 @@ gradient_colors <- list(
 
 ##########################
 usethis::use_data(scanpy_colors, discrete_colors, gradient_colors,
-                  strt96barcodes, sex_genes,
+                  strt96barcodes, sex_genes, curated_markers,
                   overwrite = TRUE)

@@ -23,3 +23,16 @@ MT,ENSMMUG00000065388,Mt_tRNA
 MT,ENSMMUG00000065371,Mt_tRNA
 MT,ENSMMUG00000065386,Mt_tRNA
 MT,ENSMMUG00000065355,Mt_tRNA
+MT,ND1,protein_coding
+MT,ND2,protein_coding
+MT,COX1,protein_coding
+MT,COX2,protein_coding
+MT,ATP8,protein_coding
+MT,ATP6,protein_coding
+MT,COX3,protein_coding
+MT,ND3,protein_coding
+MT,ND4L,protein_coding
+MT,ND4,protein_coding
+MT,ND5,protein_coding
+MT,ND6,protein_coding
+MT,CYTB,protein_coding

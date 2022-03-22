@@ -8,6 +8,7 @@ tl_crossTableEnrichment(
   tab,
   p.adjust = T,
   heatmap = T,
+  proportion_by = c("column", "row"),
   pal_1 = "Purples",
   pal_2 = "Purples",
   pal_3 = "YlOrRd",
@@ -21,7 +22,7 @@ tl_crossTableEnrichment(
 
 \item{heatmap}{plot heatmap}
 
-\item{pal_1, pal_2, pal_3, pal_4}{palette name in \code{\link{RColorBrewer::brewer.pal}}}
+\item{proportion_by}{row or column}
 }
 \value{
 a matrix of pvalues

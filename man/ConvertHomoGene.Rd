@@ -11,7 +11,14 @@ https://github.com/saeyslab/nichenetr/blob/master/R/supporting_functions.R
 https://github.com/saeyslab/nichenetr/blob/master/R-raw/developing_package_light.R
 }
 \usage{
-ConvertHomoGene(genes, orgA = "human", orgB = "mouse", verbose = F)
+ConvertHomoGene(
+  genes,
+  orgA = "human",
+  orgB = "mouse",
+  attrA = NULL,
+  attrB = NULL,
+  verbose = F
+)
 }
 \arguments{
 \item{genes}{genes to be converted}
@@ -19,6 +26,10 @@ ConvertHomoGene(genes, orgA = "human", orgB = "mouse", verbose = F)
 \item{orgA}{from which organism, now human, mouse, macaque are supported}
 
 \item{orgB}{to which organism, now human, mouse, macaque are supported}
+
+\item{attrA}{attributes for orgA. default: hgnc_symbol, mgi_symbol or external_gene_name for human, mouse, macaque, respectively.}
+
+\item{attrB}{atrributes for orgB [eg. listAttributes()]}
 
 \item{verbose}{report information}
 }

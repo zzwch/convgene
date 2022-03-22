@@ -4,7 +4,13 @@
 \alias{show_colors}
 \title{Show colours}
 \usage{
-show_colors(colours, labels = TRUE, borders = NULL, cex_label = 1)
+show_colors(
+  colours,
+  labels = TRUE,
+  borders = NULL,
+  cex_label = 1,
+  label_names = FALSE
+)
 }
 \arguments{
 \item{colours}{a character vector of colours}
@@ -14,12 +20,14 @@ show_colors(colours, labels = TRUE, borders = NULL, cex_label = 1)
 \item{borders}{colour of the borders of the tiles; matches the \code{border} argument of \code{\link[graphics:rect]{graphics::rect()}}. The default means \code{par("fg")}. Use \code{border = NA} to omit borders.}
 
 \item{cex_label}{size of printed labels, works the same as \code{cex} parameter of \code{plot()}}
+
+\item{label_names}{show names of colours instead of hexadecimal representation}
 }
 \value{
 
 }
 \description{
-A alias function for scales::show_col
+Modified from scales::show_col
 }
 \examples{
 

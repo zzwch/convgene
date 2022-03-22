@@ -11,7 +11,8 @@ pl_vioboxplot(
   fill_by = x,
   fill_colors = NULL,
   box_color = "black",
-  box_fill_color = "white"
+  box_fill_color = "white",
+  axis.x.angle = 45
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ pl_vioboxplot(
 \item{box_color}{border color of boxplot}
 
 \item{box_fill_color}{fill color of boxplot}
+
+\item{axis.x.angle}{angle of axis.text.x}
 }
 \value{
 a ggplot object

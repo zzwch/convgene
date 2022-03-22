@@ -4,7 +4,15 @@
 \alias{vlookup}
 \title{vlookup with multiple keys supported}
 \usage{
-vlookup(df, x, keys = 1, select = NULL, collapse = "_", return.key = FALSE)
+vlookup(
+  df,
+  x,
+  keys = 1,
+  select = NULL,
+  collapse = "_",
+  return.key = FALSE,
+  drop = F
+)
 }
 \arguments{
 \item{df}{data.frame}
@@ -15,7 +23,11 @@ vlookup(df, x, keys = 1, select = NULL, collapse = "_", return.key = FALSE)
 
 \item{select}{colname(s) to return}
 
+\item{collapse}{collapse keys}
+
 \item{return.key}{whether to return keys}
+
+\item{drop}{usefull when return vector}
 }
 \value{
 vector or data.frame

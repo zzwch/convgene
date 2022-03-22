@@ -205,6 +205,7 @@ pp_removeCCgenesByCor <- function(object, features = NULL, cor_th = 0.3){
 #' @param s.features A vector of features associated with S phase (CellCycleScoring)
 #' @param g2m.features A vector of features associated with G2M phase (CellCycleScoring)
 #' @param do.regress.cc regress out cell cycle scores (ScaleData)
+#' @param vars.to.regress other vars to be regressed
 #' @param do.scale Whether to scale the data. (ScaleData)
 #' @param pp do SCTransform or standard RNA process
 #' @param center_by set a meta name when pp == "centerData" (pp_centerData)
@@ -224,6 +225,7 @@ pp_preprocess <- function(object,
                           s.features = cc.genes$s.genes,
                           g2m.features = cc.genes$g2m.gene,
                           do.regress.cc = T,
+                          vars.to.regress = NULL,
                           do.scale = T,
                           pp = c("SCT", "RNA", "centerData"),
                           center_by = NULL,
@@ -236,7 +238,7 @@ pp_preprocess <- function(object,
   object %<>% NormalizeData(scale.factor = scale.factor) %>%
     CellCycleScoring(s.features = s.features, g2m.features = g2m.features, set.ident = T)
 
-  vars.to.regress <- if(do.regress.cc) c("S.Score", "G2M.Score") else NULL
+  vars.to.regress <- if(do.regress.cc) unique(c(vars.to.regress, "S.Score", "G2M.Score")) else vars.to.regress
 
   if(pp == "SCT"){
     object %<>% SCTransform(variable.features.n = nfeatures, vars.to.regress = vars.to.regress) %>%
@@ -398,6 +400,107 @@ pp_fastMNN <- function(object_list, genes_used = NULL,
   }
 }
 
+
+#' @title Scrublet
+#' @description See preprint: Scrublet: computational identification of cell doublets in single-cell transcriptomic data
+#' Samuel L Wolock, Romain Lopez, Allon M Klein.  bioRxiv 357368; doi: https://doi.org/10.1101/357368
+#'
+#' see also https://rdrr.io/github/scfurl/m3addon/src/R/scrublet.R
+#'
+#' @param object the Seurat Object upon which to perform Scrublet, RNA assay count slot will be used.
+#' @param return_results_only bool (optional, default False)
+#' @param min_counts, int (optional, default=2), See scrublet reference
+#' @param min_cells, int (optional, default=3), See scrublet reference
+#' @param expected_doublet_rate, float (optional, default=0.06), See scrublet reference - expected_doublet_rate: the
+#' fraction of transcriptomes that are doublets, typically 0.05-0.1. Results are not particularly sensitive to this parameter. For this example, the expected doublet rate comes from the Chromium User Guide: https://support.10xgenomics.com/permalink/3vzDu3zQjY0o2AqkkkI4CC
+#' @param min_gene_variability_pctl, int (optional, default=85), See scrublet reference
+#' @param n_prin_comps, int (optional, default=50), See scrublet reference  (Number of principal components to use)
+#' @param sim_doublet_ratio, int (optional, default=2),  the number of doublets to simulate, relative to the number of observed transcriptomes. This should be high enough that all doublet states are well-represented by simulated doublets. Setting it too high is computationally expensive. The default value is 2, though values as low as 0.5 give very similar results for the datasets that have been tested.
+#' @param n_neighbors, int (optional) n_neighbors: Number of neighbors used to construct the KNN classifier of observed transcriptomes and simulated doublets. The default value of round(0.5*sqrt(n_cells)) generally works well.
+#' Return only a list containing scrublet output
+#' @return The input CellDataSet with an additional column added to pData with both the doublet_score output from scrublet,
+#' and
+#' @importFrom reticulate use_python
+#' @importFrom reticulate source_python
+#' @export
+pp_scrublet <- function (object,
+                        return_results_only = FALSE, min_counts=2,
+                        min_cells=3, expected_doublet_rate=NULL,
+                        min_gene_variability_pctl=85,
+                        n_prin_comps=50, sim_doublet_ratio=2, n_neighbors=NULL)
+{
+  #reticulate::use_python(python_home)
+  if(!reticulate::py_available("scrublet")) stop("python module scrublet does not seem to be installed; - try running 'py_config()'")
+  reticulate::source_python(file.path(system.file(package = "convgene"),
+                                  "scrublet.py"))
+  X <- Matrix::t(object@assays$RNA@counts) %>% as("dgTMatrix")
+  i <- as.integer(X@i)
+  j <- as.integer(X@j)
+  val <- X@x
+  dim <- as.integer(X@Dim)
+  if(is.null(n_neighbors)){
+    n_neighbors <- round(0.5*sqrt(nrow(X)))
+  }
+
+
+    # Rates in the 'Chromium Single Cell 3’ Reagent Kits v2 User Guide':
+    # Multiplet Rate (%)  # of Cells Loaded   # of Cells Recovered
+    # 0.40%   870 500
+    # 0.80%   1700    1000
+    # 1.60%   3500    2000
+    # 2.30%   5300    3000
+    # 3.10%   7000    4000
+    # 3.90%   8700    5000
+    # 4.60%   10500   6000
+    # 5.40%   12200   7000
+    # 6.10%   14000   8000
+    # 6.90%   15700   9000
+    # 7.60%   17400   10000
+    # from the Chromium User Guide: https://support.10xgenomics.com/permalink/3vzDu3zQjY0o2AqkkkI4CC
+    #
+    # Rates in the 'Chromium Single Cell 3’ Reagent Kits v3 User Guide':
+    # Multiplet Rate (%) # of Cells Loaded # of Cells Recovered
+    # ~0.4%	~800	~500
+    # ~0.8%	~1,600	~1,000
+    # ~1.6%	~3,200	~2,000
+    # ~2.3%	~4,800	~3,000
+    # ~3.1%	~6,400	~4,000
+    # ~3.9%	~8,000	~5,000
+    # ~4.6%	~9,600	~6,000
+    # ~5.4%	~11,200	~7,000
+    # ~6.1%	~12,800	~8,000
+    # ~6.9%	~14,400	~9,000
+    # ~7.6%	~16,000	~10,000
+    # from the Chromium User Guide: https://support.10xgenomics.com/single-cell-gene-expression/overview/doc/user-guide-chromium-single-cell-3-reagent-kits-user-guide-v3-chemistry#header
+    #
+    # initialize Scrublet object
+    # The relevant parameters are:
+    #
+    # expected_doublet_rate: the expected fraction of transcriptomes that are doublets, typically 0.05-0.1. Results are not particularly sensitive to this parameter. For this example, the expected doublet rate comes from the Chromium User Guide: https://support.10xgenomics.com/permalink/3vzDu3zQjY0o2AqkkkI4CC
+    # sim_doublet_ratio: the number of doublets to simulate, relative to the number of observed transcriptomes. This should be high enough that all doublet states are well-represented by simulated doublets. Setting it too high is computationally expensive. The default value is 2, though values as low as 0.5 give very similar results for the datasets that have been tested.
+    # n_neighbors: Number of neighbors used to construct the KNN classifier of observed transcriptomes and simulated doublets. The default value of round(0.5*sqrt(n_cells)) generally works well.
+
+  if(is.null(expected_doublet_rate)){
+    expected_doublet_rate <- 0.39*nrow(X)/50000
+  }
+
+  scrublet_py_args<-c(list(i=i, j=j, val=val, dim=dim,
+                           expected_doublet_rate=expected_doublet_rate, min_counts=min_counts,
+                           min_cells=min_cells, min_gene_variability_pctl=min_gene_variability_pctl, n_prin_comps=n_prin_comps,
+                           sim_doublet_ratio=sim_doublet_ratio, n_neighbors=n_neighbors))
+  scrublet_res <- do.call(scrublet_py, scrublet_py_args)
+  names(scrublet_res)<-c("doublet_scores", "predicted_doublets")
+  if (return_results_only) {
+    return(scrublet_res)
+  }
+  else {
+    object[["scrublet_score"]]<-scrublet_res$doublet_scores
+    object[["scrublet_predicted"]]<-scrublet_res$predicted_doublets
+    object
+  }
+}
+
+
 #' A wrapper function to quickly run fastMNN using SeuratWrappers::RunFastMNN
 #'
 #' Run NormalizeData, CellCycleScoring, SelectIntegrationFeatures, RunFastMNN, RunUMAP/TSNE, FindClusters and FindMarkers.
@@ -492,4 +595,49 @@ pp_seuratV3Integration <- function(object_list, genes_used = NULL,
   }else{
     return(object_merge_integrated)
   }
+}
+
+
+#' transform reduction coordinates
+#'
+#' @param object seurat3 object
+#' @param reduction umap or tsne or something
+#' @param transform_matrix 3 x 3 matrix derived from crosslink::transform_matrix_affine
+#'
+#' @return seurat3 object
+#' @export
+#'
+#' @examples
+#'
+pp_transform2dDim <- function(object, reduction = "umap", transform_matrix = crosslink::transform_matrix_affine(type = "reflect", theta = 0)){
+  if(reduction %in% Reductions(object)){
+    coln <- colnames(object@reductions[[reduction]]@cell.embeddings)
+    object@reductions[[reduction]]@cell.embeddings %<>%
+      transform_by_matrix(
+        matrix = transform_matrix
+      )
+    colnames(object@reductions[[reduction]]@cell.embeddings) <- coln
+    return(object)
+  }else{
+    stop(reduction,"does not exist!")
+  }
+}
+
+
+#' Add Mitochondrial genes ratio
+#'
+#' @param object seurat object
+#' @param nCount colname of meta.data for UMI count
+#' @param mito_genes genes to be used as Mitochondrial genes. default: `grepl("^mt-", rownames(object), ignore.case = T)`
+#'
+#' @return updated seurat object
+#' @export
+#'
+#' @examples
+#'
+pp_addMitoRatio <- function(object, nCount = "nCount_RNA", mito_genes = NULL){
+  if(is.null(mito_genes)) mito_genes <- grepl("^mt-", rownames(object), ignore.case = T)
+  object$rMT_RNA <-
+    Matrix::colSums(GetAssayData(object, slot = "counts")[mito_genes,])/object[[nCount]]
+  return(object)
 }

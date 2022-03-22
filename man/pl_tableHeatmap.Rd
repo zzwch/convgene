@@ -7,8 +7,13 @@
 pl_tableHeatmap(
   tab,
   palette = "YlGn",
-  n = 5,
+  palette_n = 5,
   min = 0,
+  zero_as_na = TRUE,
+  color_normalized = c("none", "row", "column"),
+  color_scale_fun = I,
+  number_normalized = c("none", "row", "column"),
+  number_format = list(digits = 1, nsmall = 1),
   title = NULL,
   xlab = NULL,
   ylab = NULL
@@ -19,9 +24,19 @@ pl_tableHeatmap(
 
 \item{palette}{palette name in RColorBrewer or a vector of gradient colors}
 
-\item{n}{length of gradient colors}
+\item{palette_n}{interpolate number}
 
 \item{min}{less than min will be setted to NA}
+
+\item{zero_as_na}{coerce zero in tab to na}
+
+\item{color_normalized}{color by normalized value}
+
+\item{color_scale_fun}{color by scaled value with this function. Use I() to be asis.}
+
+\item{number_normalized}{show number of normalized value}
+
+\item{number_format}{arguments list for `format`}
 
 \item{title}{plot title}
 

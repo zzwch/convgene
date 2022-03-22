@@ -410,6 +410,7 @@ pl_dotplot <- function(
 #' @param fill_colors fill colors of violins
 #' @param box_color border color of boxplot
 #' @param box_fill_color fill color of boxplot
+#' @param axis.x.angle angle of axis.text.x
 #'
 #' @return a ggplot object
 #' @import ggplot2
@@ -424,7 +425,8 @@ pl_vioboxplot <- function(
   fill_by = x,
   fill_colors = NULL,
   box_color = "black",
-  box_fill_color = "white"){
+  box_fill_color = "white",
+  axis.x.angle = 45){
 
   if(class(meta_data) == "Seurat") meta_data <- FetchData(meta_data, vars = c(x, y, fill_by))
   p <- ggplot(meta_data, mapping = aes_string(x,y)) +
@@ -438,7 +440,7 @@ pl_vioboxplot <- function(
                  width = 0.25,
                  outlier.shape = NA)+
     theme_classic() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    theme(axis.text.x = element_text(angle = axis.x.angle, hjust = 1))
   if(!IsNULLorNA(fill_colors)){
     p <- p + scale_fill_manual(values = fill_colors)
   }
@@ -564,8 +566,13 @@ pl_averageHeatmap <- function(
 #'
 #' @param tab a table object
 #' @param palette palette name in RColorBrewer or a vector of gradient colors
-#' @param n length of gradient colors
+#' @param palette_n interpolate number
 #' @param min less than min will be setted to NA
+#' @param zero_as_na coerce zero in tab to na
+#' @param color_normalized color by normalized value
+#' @param number_normalized show number of normalized value
+#' @param color_scale_fun color by scaled value with this function. Use I() to be asis.
+#' @param number_format arguments list for `format`
 #' @param title plot title
 #' @param xlab plot x lab
 #' @param ylab plot y lab
@@ -576,10 +583,18 @@ pl_averageHeatmap <- function(
 #'
 #' @examples
 #'
-pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL, xlab = NULL, ylab = NULL){
+pl_tableHeatmap <- function(tab, palette = "YlGn", palette_n = 5, min = 0,
+                            zero_as_na = TRUE,
+                            color_normalized = c("none", "row", "column"),
+                            color_scale_fun = I,
+                            number_normalized = c("none", "row", "column"),
+                            number_format = list(digits = 1, nsmall = 1),
+                            title = NULL, xlab = NULL, ylab = NULL){
   # ggData
   ggTab <- reshape2::melt(tab)
-  ggTab$value[ggTab$value == 0] <- NA
+  if(zero_as_na){
+    ggTab$value[ggTab$value == 0] <- NA
+  }
 
   if(!is.factor(ggTab[,1])) ggTab[,1] <- factor(ggTab[,1])
   ggTab[,1] <- factor(ggTab[,1],
@@ -588,22 +603,62 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
   #                     levels = levels(ggTab[,2]))
 
   # background colors
-  colours <- CheckBrewerPal(palette, n = n)
+  colours <- CheckBrewerPal(palette, n = palette_n)
   # axis
-  xx <- colnames(ggTab)[2]
-  yy <- colnames(ggTab)[1]
+  xx <- colnames(ggTab)[2] %>% as.name()
+  yy <- colnames(ggTab)[1] %>% as.name()
+  # vv <- colnames(ggTab)[3] %>% as.name()
 
-  p <- ggplot(ggTab, mapping = aes_(x = as.name(xx), y = as.name(yy))) +
-    geom_tile(mapping = aes(fill = log(value+1)
+  normalize_fun <- function(x){
+    100 * x/sum(x, na.rm = T)
+  }
+
+  # color normalize
+  color_normalized <- match.arg(color_normalized)
+  if(color_normalized == "row"){
+    ggTab %<>% group_by({{ yy }}) %>%
+      mutate(color_normalized = normalize_fun(value)) %>%
+      ungroup()
+  }else if(color_normalized == "column"){
+    ggTab %<>% group_by({{ xx }}) %>%
+      mutate(color_normalized = normalize_fun(value)) %>%
+      ungroup()
+  }else{
+    ggTab %<>% mutate(color_normalized = value)
+  }
+
+  ggTab$color_normalized <- as.numeric(color_scale_fun(ggTab$color_normalized))
+  # I return AsIs, so use as.numeric to coerce
+
+  # show numbers normalize
+  number_normalized <- match.arg(number_normalized)
+  if(number_normalized == "row"){
+    ggTab %<>% group_by({{ yy }}) %>%
+      mutate(number_normalized = normalize_fun(value)) %>%
+      ungroup()
+  }else if(number_normalized == "column"){
+    ggTab %<>% group_by({{ xx }}) %>%
+      mutate(number_normalized = normalize_fun(value)) %>%
+      ungroup()
+  }else{
+    ggTab %<>% mutate(number_normalized = value)
+  }
+
+  if (color_normalized != "none") {
+
+  }
+  # plot
+  p <- ggplot(ggTab, mapping = aes_(x =xx, y = yy)) +
+    geom_tile(mapping = aes(fill = color_normalized
                             #, height = sqrt((value+1)/max(value)), width = sqrt((value+1)/max(value))
     ),
     color = "grey",
     show.legend = F) +
     #geom_tile(fill = NA, color = "grey") +
     labs(title = title, x = xlab, y = ylab) +
-    geom_text(mapping = aes(label = value),
-              data = subset(ggTab, !is.na(ggTab$value)),
-              color = ifelse(ggTab$value[!is.na(ggTab$value)] >= min, "black", "grey")) +
+    geom_text(mapping = aes(label = do.call(format, c(list(x = number_normalized), number_format))),
+              data = subset(ggTab, !is.na(ggTab$number_normalized)),
+              color = ifelse(ggTab$number_normalized[!is.na(ggTab$number_normalized)] >= min, "black", "grey")) +
     scale_fill_gradientn(colours = colours, na.value = "white") +
     theme_classic() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
@@ -619,7 +674,7 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
 #' Enhanced DimPlot of Seurat v3
 #'
 #' @param object Seurat object
-#' @param group_by Name of one or more metadata columns to group (color) cells by (for example, orig.ident); pass 'ident' to group by identity class
+#' @param group.by Name of one or more metadata columns to group (color) cells by (for example, orig.ident); pass 'ident' to group by identity class
 #' You can also plot features with gradient cols.
 #' @param ncol Number of columns for display when faceting plots
 #' @param subset_by enhanced option, subset cells by the colname.
@@ -637,7 +692,7 @@ pl_tableHeatmap <- function(tab, palette = "YlGn", n = 5, min = 0, title = NULL,
 #'
 #' @examples
 #'
-pl_dimplot <- function(object, group_by, shape_by = NULL, ncol = 2, slot = "data",
+pl_dimplot <- function(object, group.by, shape_by = NULL, ncol = 2, slot = "data",
                       subset_by = NULL, subset_groups = NULL, subset_cells = NULL,
                       reduction = "umap", dims = c(1,2), pt.size = 1,
                       cols = scanpy_colors$default_64){
@@ -651,16 +706,16 @@ pl_dimplot <- function(object, group_by, shape_by = NULL, ncol = 2, slot = "data
   embeddings <- Embeddings(object, reduction = reduction)[,dims]
   dims <- colnames(embeddings)
 
-  ggData <- reshape2::melt(cbind(Seurat::FetchData(object, c(group_by, shape_by), slot = slot), embeddings),
+  ggData <- reshape2::melt(cbind(Seurat::FetchData(object, c(group.by, shape_by), slot = slot), embeddings),
                            id.vars = c(dims, shape_by),
-                           measure.vars = group_by,
-                           variable.name = "group_by",
+                           measure.vars = group.by,
+                           variable.name = "group.by",
                            value.name = "value",
                            factorsAsStrings = F)
-  ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, c(group_by, shape_by), slot = slot), embeddings)[subset_cells,],
+  ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, c(group.by, shape_by), slot = slot), embeddings)[subset_cells,],
                             id.vars = c(dims, shape_by),
-                            measure.vars = group_by,
-                            variable.name = "group_by",
+                            measure.vars = group.by,
+                            variable.name = "group.by",
                             value.name = "value",
                             factorsAsStrings = F)
 
@@ -669,23 +724,115 @@ pl_dimplot <- function(object, group_by, shape_by = NULL, ncol = 2, slot = "data
       geom_point(mapping = aes_string(dims[1], dims[2], shape = shape_by),
                  color = "grey80", data = ggData, size = pt.size) +
       geom_point(mapping = aes_string(dims[1], dims[2], shape = shape_by,
-                                      color = "value",group = "group_by"),
+                                      color = "value",group = "group.by"),
                  data = ggData2, size = pt.size)
   }else{
     p <- ggplot() +
       geom_point(mapping = aes_string(dims[1], dims[2],
                                       color = "value",
-                                      group = "group_by",
+                                      group = "group.by",
                                       shape = shape_by),
                  data = ggData, size = pt.size)
   }
 
-  if(length(group_by) > 1){
-    p <- p + facet_wrap(~group_by, ncol = ncol)
+  if(length(group.by) > 1){
+    p <- p + facet_wrap(~group.by, ncol = ncol)
   }
 
   if(!is.null(cols)) {
-    if(group_by %in% colnames(object@meta.data)){
+    if(group.by %in% colnames(object@meta.data)){
+      p <- p + scale_color_manual(values = cols)
+    }else{
+      p <- p + scale_color_gradientn(colors = cols)
+    }
+  }
+
+  p <- p + guides(color = guide_legend(override.aes = list(size = 3*pt.size))) +
+    theme_classic() +
+    theme(panel.border = element_rect(color = "black", fill = NA),
+          axis.line = element_blank())
+
+  return(p)
+}
+
+#' rastr version of Dimensional reduction plot
+#'
+#' Enhanced DimPlot of Seurat v3
+#'
+#' @param object Seurat object
+#' @param group.by Name of one or more metadata columns to group (color) cells by (for example, orig.ident); pass 'ident' to group by identity class
+#' You can also plot features with gradient cols.
+#' @param ncol Number of columns for display when faceting plots
+#' @param subset_by enhanced option, subset cells by the colname.
+#' @param subset_groups enhanced option, subset cells of these categories.
+#' @param subset_cells A vector of cell names. if not NULL, subset these cells, otherwise use subset_by and subset_groups
+#' @param reduction Which dimensionality reduction to use. e.g. umap, tsne, pca
+#' @param dims Dimensions to plot, must be a two-length numeric vector specifying x- and y-dimensions
+#' @param pt.size Adjust point size for plotting
+#' @param cols Vector of colors, each color corresponds to an identity class.
+#' @param slot FetchData of features from which slot.
+#' @param shape_by one column name to control point shape
+#'
+#' @return a ggplot object
+#' @export
+#'
+#' @examples
+#'
+pl_rastrDimplot <- function(object, group.by, shape_by = NULL, ncol = 2, slot = "data",
+                       subset_by = NULL, subset_groups = NULL, subset_cells = NULL,
+                       reduction = "umap", dims = c(1,2), pt.size = 1,
+                       cols = scanpy_colors$default_64){
+
+  if(is.null(subset_cells)){
+    if(!is.null(subset_groups) && !is.null(subset_by)){
+      subset_cells <- rownames(object@meta.data[object@meta.data[,subset_by] %in% subset_groups,])
+    }
+  }
+
+  embeddings <- Embeddings(object, reduction = reduction)[,dims]
+  dims <- colnames(embeddings)
+
+  ggData <- reshape2::melt(cbind(Seurat::FetchData(object, c(group.by, shape_by), slot = slot), embeddings),
+                           id.vars = c(dims, shape_by),
+                           measure.vars = group.by,
+                           variable.name = "group.by",
+                           value.name = "value",
+                           factorsAsStrings = F)
+  ggData2 <- reshape2::melt(cbind(Seurat::FetchData(object, c(group.by, shape_by), slot = slot), embeddings)[subset_cells,],
+                            id.vars = c(dims, shape_by),
+                            measure.vars = group.by,
+                            variable.name = "group.by",
+                            value.name = "value",
+                            factorsAsStrings = F)
+
+  if(!is.null(subset_cells)){
+    p <- ggplot() +
+      ggrastr::rasterise(
+        geom_point(mapping = aes_string(dims[1], dims[2], shape = shape_by),
+                   color = "grey80", data = ggData, size = pt.size)
+        ) +
+      ggrastr::rasterise(
+        geom_point(mapping = aes_string(dims[1], dims[2], shape = shape_by,
+                                        color = "value",group = "group.by"),
+                 data = ggData2, size = pt.size)
+        )
+  }else{
+    p <- ggplot() +
+      ggrastr::rasterise(
+        geom_point(mapping = aes_string(dims[1], dims[2],
+                                        color = "value",
+                                        group = "group.by",
+                                        shape = shape_by),
+                   data = ggData, size = pt.size)
+      )
+  }
+
+  if(length(group.by) > 1){
+    p <- p + facet_wrap(~group.by, ncol = ncol)
+  }
+
+  if(!is.null(cols)) {
+    if(group.by %in% colnames(object@meta.data)){
       p <- p + scale_color_manual(values = cols)
     }else{
       p <- p + scale_color_gradientn(colors = cols)
@@ -821,7 +968,7 @@ pl_splitDimplot <- function(object, reduction = "umap",
 
     for(k in groups){
       print(
-        pl_dimplot(object, group_by = k, subset_cells = subset_cells, reduction = reduction,
+        pl_dimplot(object, group.by = k, subset_cells = subset_cells, reduction = reduction,
                    cols = colors,  pt.size = pt.size) +
           coord_fixed(coord_fixed_ratio)
       )

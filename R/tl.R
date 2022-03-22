@@ -3,6 +3,34 @@
 NULL
 
 
+#' Quick add module scores for markers from Atlas of Human Blood Cells
+#'
+#' @param object Seurat3 object
+#' @param topn top n marker genes for each cluster
+#' @param ... other parameters passed to `Seurat::AddModuleScore`
+#'
+#' @return Seurat Object
+#' @export
+#' @details
+#' http://scrna.sklehabc.com/
+#' Marker Gene: Information of 43 transcriptional cell clusters and signature genes with AUC score.
+#' National Science Review, Volume 8, Issue 3, March 2021, nwaa180, https://doi.org/10.1093/nsr/nwaa180
+#'
+#' @examples
+#'
+tl_AddABCScore <- function(object, topn = 50, ...){
+  abc_modules <- curated_markers$ABC_human %>%
+    group_by(RNA_Cluster) %>%
+    top_n(topn, -p_val_adj) %$%
+    df2list(Gene, RNA_Cluster, drop = T)
+
+  for (i in names(abc_modules)) {
+    object <- Seurat::AddModuleScore(object, abc_modules[i], name = paste0("ABC_",i), ...)
+  }
+
+  return(object)
+}
+
 #' Gene Set Scores
 #'
 #' @param object Seurat3 object
@@ -24,6 +52,7 @@ tl_GeneSetScore <- function(
     CheckFeatures(object, features, T, T)
   }, simplify = F)
 
+  method <- match.arg(method)
   if(method == "pca"){
     return(
       sapply(genesets, function(features) {
@@ -198,6 +227,74 @@ tl_PairwiseDEGs <- function(
   }
 
   return(multiDEGs[,columns_order])
+}
+
+
+#' calculate DEGs for two groups
+#'
+#' useful for volcano plot
+#'
+#' @param data expression matrix
+#' @param group.by vector
+#' @param group.1 character or vector
+#' @param group.2 character or vector
+#' @param FC_fun Seurat::ExpMean or base::mean
+#' @param stat_fun wilcox.test or t.test
+#'
+#' @return data.frame
+#' @export
+#'
+#' @examples
+#'
+tl_statGene <- function(
+  data,
+  group.by,
+  group.1,
+  group.2 = NULL,
+  FC_fun = Seurat::ExpMean,
+  stat_fun = stats::wilcox.test){
+  ind_1 <- group.by %in% group.1
+  ind_2 <- if(is.null(group.2)) !group.by %in% group.1 else group.by %in% group.2
+
+  FC <- apply(data, 1, function(expr) {FC_fun(expr[ind_1]) - FC_fun(expr[ind_2])}) * log2(exp(1))
+  P <- apply(data, 1, function(expr) {stat_fun(expr[ind_1], expr[ind_2])$p.value})
+  data.frame(
+    gene = rownames(data) %>% as.character(),
+    log2foldchange = FC,
+    pvalue = P,
+    p.adjust = p.adjust(P, "fdr")
+  )
+}
+
+#' Prepare genelist for GSEA
+#'
+#' @param data expression matrix
+#' @param group.by vector
+#' @param group.1 character or vector
+#' @param group.2 character or vector
+#' @param order.by order method
+#' @param stat_fun stat function, used for 'stat_statistic'. Now only t.test is valid.
+#'
+#' @return geneList
+#' @export
+#'
+#' @examples
+#'
+tl_OrderGene <- function(
+  data,
+  group.by,
+  group.1,
+  group.2 = NULL,
+  order.by = c("FC_ExpMean", "FC_mean", "stat_statistic"),
+  stat_fun = t.test){
+
+  ind_1 <- group.by %in% group.1
+  ind_2 <- if(is.null(group.2)) !group.by %in% group.1 else group.by %in% group.2
+  if (order.by == "FC_ExpMean")  ret <- apply(data, 1, function(expr) {Seurat::ExpMean(expr[ind_1]) - Seurat::ExpMean(expr[ind_2])})
+  if (order.by == "FC_mean")  ret <- apply(data, 1, function(expr) {mean(expr[ind_1]) - mean(expr[ind_2])})
+  if (order.by == "stat_statistic")  ret <- apply(data, 1, function(expr) {stat_fun(expr[ind_1], expr[ind_2])$statistic})
+
+  return(ret %>% sort(decreasing = T))
 }
 
 #' calculate inter-similarity or intra-similarity of clusters
@@ -418,12 +515,49 @@ tl_calcFeatureScore <- function(
 }
 
 
+#' Plot proportions
+#'
+#' @param tab table
+#' @param proportion_by row or column
+#' @param ret_value return proportions or heatmap
+#' @inheritParams pheatmap
+#' @param ... other params used for pheatmap
+#'
+#' @return proportions or heatmap
+#' @export
+#'
+#' @examples
+#'
+tl_crossTable <- function(
+  tab, proportion_by = c("column", "row"), ret_value = F,
+  color = colorRampPalette(c("white", "orange", "red"))(20),
+  cluster_rows = F, cluster_cols = F, display_numbers = T,
+  number_format = "%1.1f%%", ...
+){
+  proportion_by <- match.arg(proportion_by)
+  if(proportion_by == "row")
+    pmat <- apply(tab, 2, function(x) x/rowSums(tab)) %>% t
+  else
+    pmat <- apply(tab, 1, function(x) x/colSums(tab))
+
+  pmat %<>% t
+  if(ret_value) return(pmat)
+  pheatmap::pheatmap(
+    pmat * 100,
+    color = color, cluster_rows = cluster_rows, cluster_cols = cluster_cols,
+    display_numbers = display_numbers, number_format = number_format, ...)
+}
+
 #' statistics of cross table
 #'
 #' @param tab a table object
 #' @param p.adjust adjust pvalue
+#' @param proportion_by row or column
+#' @param pal_1
+#' @param pal_2
+#' @param pal_3
+#' @param pal_4
 #' @param heatmap plot heatmap
-#' @param pal_1,pal_2,pal_3,pal_4 palette name in \code{\link{RColorBrewer::brewer.pal}}
 #'
 #' @return a matrix of pvalues
 #' @export
@@ -431,7 +565,7 @@ tl_calcFeatureScore <- function(
 #' @examples
 #'
 tl_crossTableEnrichment <- function(
-  tab, p.adjust = T,heatmap = T,
+  tab, p.adjust = T,heatmap = T, proportion_by = c("column", "row"),
   pal_1 = "Purples",
   pal_2 = "Purples",
   pal_3 = "YlOrRd",
@@ -460,19 +594,27 @@ tl_crossTableEnrichment <- function(
   dimnames(tab.p) <- dimnames(tab)
 
   if(heatmap){
+    proportion_by <- match.arg(proportion_by)
     tab.h <- tab
     tab.h[tab == 0] <- NA
-    pheatmap::pheatmap(tab.h, cluster_cols = F, cluster_rows = F, display_numbers = tab,
+    pheatmap::pheatmap(tab.h, cluster_cols = F, cluster_rows = F, display_numbers = tab, main = "count",
                        color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_1))(11))
-    pheatmap::pheatmap(tab.h, cluster_cols = F, cluster_rows = F,
-                       color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_2))(11), scale = "row")
+    pheatmap::pheatmap(tab.h, cluster_cols = F, cluster_rows = F, main = stringr::str_glue("count, {proportion_by} scaled"),
+                       color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_2))(11), scale = proportion_by)
+
+    tab.prop <- tl_crossTable(tab, proportion_by = proportion_by, ret_value = T)
+
     tab.ph <- -log10(abs(tab.p)) * sign(tab.p)
     tab.ph[tab.ph < -log10(0.05)] <- NA
-    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F, display_numbers = tab.h,
+    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F,
+                       display_numbers = formattable::percent(tab.prop),
+                       main = "p value, enrichment",
                        color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_3))(11))
     tab.ph <- log10(abs(tab.p)) * sign(tab.p)
     tab.ph[tab.ph < -log10(0.05)] <- NA
-    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F, display_numbers = tab.h,
+    pheatmap::pheatmap(tab.ph, cluster_cols = F, cluster_rows = F,
+                       display_numbers = formattable::percent(tab.prop),
+                       main = "p value, anti-enrichment",
                        color = colorRampPalette(RColorBrewer::brewer.pal(9, pal_4))(11))
   }
   return(tab.p)
