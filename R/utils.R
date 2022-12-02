@@ -1302,28 +1302,46 @@ getMGIHomoGeneTable <- function(
 #' @param keys colnames of \code{df} as key to search
 #' @param select colname(s) to return
 #' @param return.key whether to return keys
-#' @param collapse collapse keys
+#' @param keys.collapse collapse keys
 #' @param drop usefull when return vector
+#' @param select.collapse collapse values; set NULL to return first match
 #'
 #' @return vector or data.frame
 #' @export
 #'
 #' @examples
 #'
-vlookup <- function(df, x, keys = 1, select = NULL, collapse = "_", return.key = FALSE, drop = F){
+vlookup <- function(df, x,
+                    keys = 1, select = NULL,
+                    keys.collapse = "_",
+                    select.collapse = NULL,
+                    return.key = FALSE,
+                    drop = F){
   if(is.null(select)) {
     select <- colnames(df)
   }
 
   if(length(keys) > 1) {
     x <- apply(x, 2, function(y) trimws(as.character(y)))
-    x <- apply(x, 1, paste, collapse = collapse)
+    x <- apply(x, 1, paste, collapse = keys.collapse)
     df_keys <- apply(df[,keys], 2, function(y) trimws(as.character(y)))
-    df$key_collapsed <- apply(df_keys, 1, paste, collapse = collapse)
+    df$key_collapsed <- apply(df_keys, 1, paste, collapse = keys.collapse)
     keys <- "key_collapsed"
   }
 
-  ret <- df[match(x, df[,keys,drop = T]), select, drop = drop]
+  if(!is.null(select.collapse)){
+    df <- df[, select, drop = F] %>%
+      apply(2, FUN = function(x) {
+        tapply(x, df[[keys]],
+               FUN = function(y) {
+                 paste0(y, collapse = select.collapse)}
+               )}
+        ) %>% as.data.frame() %>%
+      rownames_to_column(var = keys)
+  }
+
+  ret <- df[match(x, df[, keys,drop = T]), select, drop = drop]
+
   if(return.key) ret <- cbind(x = x, ret)
 
   return(ret)
@@ -1546,6 +1564,8 @@ show_colors <- function(colours, labels = TRUE, borders = NULL, cex_label = 1, l
 }
 
 
+
+
 #' revert vector's levels
 #'
 #' @param x a vector
@@ -1587,7 +1607,7 @@ uniq_len <- function(x, ...) {
 #'
 #' @examples
 #'
-chiseq_roe <- function(tab, ...){
+chisq_roe <- function(tab, ...){
   chi <- chisq.test(tab, ...)
   chi$observed/chi$expected
 }
@@ -1672,3 +1692,113 @@ mergeSeuratList <- function(object_list, genes_used = NULL){
 }
 
 
+#' calc mean and rate of gene expression
+#'
+#' @param data gene by cell matrix
+#' @param group.by vector of cell attribute
+#'
+#' @return data.frame of two columns
+#' @export
+#'
+#' @examples
+#'
+calcDetectionRate <- function(data, group.by){
+  gc()
+  detection <- apply(data, 1, function(x) {
+    tapply(x, INDEX = group.by, FUN = function(y) {
+      sum(y >0)/length(y)
+    })
+  }) %>% t() %>% as.data.frame() %>% rownames_to_column() %>% pivot_longer(!all_of("rowname"))
+
+  gc()
+
+  mean <- apply(data, 1, function(x) {
+    tapply(x, INDEX = group.by, FUN = function(y) {
+      calcLogMean(y)
+    })
+  }) %>% t() %>% as.data.frame() %>% rownames_to_column() %>% pivot_longer(!all_of("rowname"))
+
+  merge(mean, detection, by = c("rowname", "name")) %>% set_colnames(c("gene", "group", "mean", "detection"))
+}
+
+
+
+#' Connection Specificity Index (CSI)
+#' Connection Specificity Index (CSI) was defined as the fraction of TFs connected to a and b that have a PCC lower than the PCC of a and b;
+#'
+#' @param pccMat Correaltion Coefficient Matrix, a full rank square matrix.
+#' @param shrink shink the PCC threshold for each element
+#'
+#' @return CSI Matrix
+#' @export
+#' @details
+#' see http://csbio.cs.umn.edu/similarity_index/guide.php
+#' https://www.nature.com/articles/nmeth.2728
+#' https://doi.org/10.1016/j.celrep.2018.10.045
+#' @examples
+#'
+CSI <- function(pccMat, shrink = 0.05){
+  n <- nrow(pccMat)
+  csiMat <- matrix(0, n, n)
+
+  for(i in seq_len(n)){
+    row_i <- pccMat[i,]
+    for(j in seq_len(n)){
+      col_j <- pccMat[,j]
+      th_ij <- pccMat[i,j] - shrink
+      csiMat[i,j] <- sum((row_i < th_ij) & (col_j < th_ij))/n
+    }
+  }
+  dimnames(csiMat) <- dimnames(pccMat)
+  return(csiMat)
+}
+
+
+#' binarization function
+#' 1 if larger than threshold, otherwise 0
+#' @param x numeric object
+#' @param th threshold, a numeric value
+#'
+#' @return binarized object
+#' @export
+#'
+#' @examples
+#'
+binarize <- function(x, th = 0){
+  (x > th)+0
+}
+
+
+#' change data.frame storage mode
+#'
+#' easy to convert numeric to character, or vice versa
+#'
+#' @param x a data.frame
+#' @param mode a character
+#'
+#' @return updated data.frame
+#' @export
+#'
+#' @examples
+#'
+setDFMode <- function(x, mode = c("character", "numeric")) {
+  x %>% as.matrix() %>% `mode<-`(value = mode) %>% as.data.frame()
+}
+
+
+#' Convert ID to symbol use clusterProfiler::bitr
+#'
+#' @inheritParams clusterProfiler::bitr
+#'
+#' @return data.frame of id and symbol map
+#' @export
+#'
+#' @examples
+#'
+bitr_id2symbol <- function(geneID, OrgDb = "org.Hs.eg.db", drop = T){
+  clusterProfiler::bitr(geneID = unique(geneID),
+                        fromType = "ENTREZID",
+                        toType = "SYMBOL",
+                        OrgDb = OrgDb,
+                        drop = drop)
+}

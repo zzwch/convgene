@@ -9,7 +9,8 @@ vlookup(
   x,
   keys = 1,
   select = NULL,
-  collapse = "_",
+  keys.collapse = "_",
+  select.collapse = NULL,
   return.key = FALSE,
   drop = F
 )
@@ -23,7 +24,9 @@ vlookup(
 
 \item{select}{colname(s) to return}
 
-\item{collapse}{collapse keys}
+\item{keys.collapse}{collapse keys}
+
+\item{select.collapse}{collapse values; set NULL to return first match}
 
 \item{return.key}{whether to return keys}
 

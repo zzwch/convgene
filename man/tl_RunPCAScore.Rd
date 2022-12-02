@@ -11,8 +11,11 @@ tl_RunPCAScore(
   reduction = "pca",
   use_all_genes = T,
   topn = 30,
+  data.scale.max = 1,
   do.score.scale = T,
-  reduction.name = "rpca"
+  score.scale.max = 1,
+  reduction.name = "rpca",
+  loadings = NULL
 )
 }
 \arguments{
@@ -28,9 +31,15 @@ tl_RunPCAScore(
 
 \item{topn}{robust top n genes of loadings}
 
+\item{data.scale.max}{scale parameter used in calculation of RPCA score. Set 0.99 or 0.95 as you like to exclude outliers.}
+
 \item{do.score.scale}{scale robust scores}
 
+\item{score.scale.max}{scale parameter used in calculation of RPCA score. Set 0.99 or 0.95 as you like to exclude outliers.}
+
 \item{reduction.name}{new reduction name}
+
+\item{loadings}{if set, use this loadings to calculate RPCA score}
 }
 \value{
 updated Seurat3 object with a new pca_score reduction added

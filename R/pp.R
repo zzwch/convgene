@@ -293,6 +293,7 @@ pp_preprocess <- function(object,
 #' @param mnn_d Number of dimensions to use for dimensionality reduction in multiBatchPCA. (batchelor::fastMNN)
 #' @param seed random seed for fastMNN
 #' @param skip_tsne you may set TRUE to skip RunTSNE step for large dataset.
+#' @param skip_clustering you may set TRUE to skip FindNeighbors and FindClusters steps for large dataset.
 #' @param resolution Value of the resolution parameter (FindClusters)
 #' @param save_object_prefix Set NULL to skip save files and FindAllMarker steps. Or a character setting the object prefix, e.g. AAA will get AAA_mnn and AAA_degs being returned.
 #' @param save_degs_dir {save_object_prefix}_degs.seurat_clusters.{sys.time}.xls will be written to here.
@@ -315,7 +316,9 @@ pp_fastMNN <- function(object_list, genes_used = NULL,
                        nfeatures = 2000,
                        integration_features = NULL,
                        remove_ccgenes_by_cor = T, cc_cor_th = 0.3,
-                       mnn_d = 20, seed = 666, skip_tsne = F,
+                       mnn_d = 20, seed = 666,
+                       skip_tsne = F,
+                       skip_clustering = F,
                        resolution = 0.5,
                        save_object_prefix = NULL,
                        save_degs_dir = "tables/",
@@ -380,8 +383,10 @@ pp_fastMNN <- function(object_list, genes_used = NULL,
   object_merge_mnn %<>% RunUMAP(reduction = "mnn", dims = 1:object_merge_mnn_d)
   if(!skip_tsne) object_merge_mnn %<>% RunTSNE(reduction = "mnn", dims = 1:object_merge_mnn_d)
 
-  object_merge_mnn %<>% FindNeighbors(dims = 1:object_merge_mnn_d, reduction = "mnn")
-  object_merge_mnn %<>% FindClusters(resolution = resolution)
+  if(!skip_clustering){
+    object_merge_mnn %<>% FindNeighbors(dims = 1:object_merge_mnn_d, reduction = "mnn")
+    object_merge_mnn %<>% FindClusters(resolution = resolution)
+  }
 
   if(!is.null(save_object_prefix)){
     time_suffix <- ifelse(save_add.sys.time, base::Sys.time(), "")

@@ -144,6 +144,7 @@ pl_slingshot <- function(object, ggplot, color_by = "ss_lineage", pt.size = 1){
 #' @param ellipse_level set ellipse area level
 #' @param ellipse_alpha ellipse aes, a value of 0 to 1
 #' @param ellipse_color ellipse aes, a color
+#' @param ellipse_hollow ellipse hollow circle, color by group, fill by `ellipse_color`
 #' @param show_center show mean point
 #' @param center_method function used to calc mean center
 #' @param center_size center point aes, a value
@@ -176,12 +177,13 @@ pl_scatterplot <- function(
   point_group_by = group_by,
   point_groups = groups,
 
-  show_ellipse = F, ellipse_level = 0.5, ellipse_alpha = 0.8, ellipse_color = "white",
+  show_ellipse = F, ellipse_level = 0.5, ellipse_alpha = 0.8,
+  ellipse_color = "white", ellipse_hollow = F,
   ellipse_group_by = point_group_by,
   ellipse_groups = point_groups,
 
   show_center = F, center_method = SummariseExpr,
-  center_size = 3, center_shape = 1, center_alpha = 1,
+  center_size = 3, center_shape = 16, center_alpha = 1,
   center_group_by = ellipse_group_by,
   center_groups = ellipse_groups,
 
@@ -256,16 +258,29 @@ pl_scatterplot <- function(
   }
   # ELLIPSE
   if(show_ellipse){
-    p <- p + stat_ellipse(mapping = aes_(x = as.name(x),
-                                        y = as.name(y),
-                                        fill = as.name(ellipse_group_by),
-                                        group = as.name(ellipse_group_by)),
-                          data = ellipse_data,
-                          color = ellipse_color,
-                          size = 1,
-                          geom = "polygon",
-                          level = ellipse_level,
-                          alpha = ellipse_alpha)
+    if(ellipse_hollow){
+      p <- p + stat_ellipse(mapping = aes_(x = as.name(x),
+                                           y = as.name(y),
+                                           color = as.name(ellipse_group_by),
+                                           group = as.name(ellipse_group_by)),
+                            data = ellipse_data,
+                            fill = ellipse_color,
+                            size = 1,
+                            geom = "polygon",
+                            level = ellipse_level,
+                            alpha = ellipse_alpha)
+    }else{
+      p <- p + stat_ellipse(mapping = aes_(x = as.name(x),
+                                           y = as.name(y),
+                                           fill = as.name(ellipse_group_by),
+                                           group = as.name(ellipse_group_by)),
+                            data = ellipse_data,
+                            color = ellipse_color,
+                            size = 1,
+                            geom = "polygon",
+                            level = ellipse_level,
+                            alpha = ellipse_alpha)
+    }
   }
 
   if(show_center){
@@ -401,6 +416,30 @@ pl_dotplot <- function(
 }
 
 
+
+#' DotPlot of top n degs
+#'
+#' @param object seurat object
+#' @param degs degs data.farme derived from `FindAllMarkers`
+#' @param topn integer,
+#' @param group_by vector
+#' @param ... other params passed to `pl_dotplot`
+#'
+#' @return a plot by pl_dotplot
+#' @export
+#'
+#' @examples
+#'
+pl_dotplot_deg <- function(object, degs, topn = 5, group_by = NULL, ...){
+  if(is.null(group_by)) group_by <- Idents(object)
+  pl_dotplot(
+    data = object@assays$RNA@data,
+    features = degs %>% group_by(cluster) %>% top_n(topn, -p_val) %>%
+      top_n(topn, avg_logFC) %>% pull(gene),
+    group_by = group_by, ...)
+}
+
+
 #' Voinlin and Boxplot in one plot
 #'
 #' @param meta_data data.frame
@@ -522,6 +561,7 @@ pl_stackedViolinPlot <- function(
 #' @param cluster_rows row clustering
 #' @param cluster_cols column clustering
 #' @param show_rownames show rownames
+#' @param return.avg return average data matrix
 #' @param ...
 #'
 #' @return a pheatmap object
@@ -536,7 +576,7 @@ pl_averageHeatmap <- function(
   heat_color = c("darkblue", "royalblue","grey100","tomato", "brown"),
   scale_feature = T, cap_max = 2, cap_min = -2,
   cluster_rows = F, cluster_cols = F,
-  show_rownames = F, ...){
+  show_rownames = F, return.avg = F,...){
 
   # do summarise
   ret_tmp <- SummariseDataByGroup(data, features,
@@ -552,6 +592,8 @@ pl_averageHeatmap <- function(
     meanData[meanData > cap_max] <- cap_max
     meanData[meanData < cap_min] <- cap_min
   }
+
+  if(return.avg) return(meanData)
 
   pheatmap::pheatmap(meanData,
            color = colorRampPalette(heat_color,
@@ -719,6 +761,7 @@ pl_dimplot <- function(object, group.by, shape_by = NULL, ncol = 2, slot = "data
                             value.name = "value",
                             factorsAsStrings = F)
 
+
   if(!is.null(subset_cells)){
     p <- ggplot() +
       geom_point(mapping = aes_string(dims[1], dims[2], shape = shape_by),
@@ -747,7 +790,7 @@ pl_dimplot <- function(object, group.by, shape_by = NULL, ncol = 2, slot = "data
     }
   }
 
-  p <- p + guides(color = guide_legend(override.aes = list(size = 3*pt.size))) +
+  p <- p + guides(color = guide_legend(override.aes = list(size = max(3, 3*pt.size)))) +
     theme_classic() +
     theme(panel.border = element_rect(color = "black", fill = NA),
           axis.line = element_blank())
@@ -1125,4 +1168,141 @@ pl_genePatternDiagram <- function(mat, cell_group, gene_group, ncol = 1, return_
       facet_wrap(~group, ncol = ncol, scales = "free_y") +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
   }
+}
+
+
+
+#' upset plot wrapper for intersection of regulons
+#'
+#' @param regulon_cluster_mat a matrix/data.frame of 0 or 1, rownames are regulons, colnames are clusters
+#' @param clusters clusters to be plotted. set NULL for all colnames of `regulon_cluster_mat`
+#' @param degs_table table of degs derived from FindAllMarkers. columns of `gene` and `cluster` is required
+#' @param nintersects set NA for all to be shown
+#' @param colors_clusters colors for clusters
+#' @param color_queries color for queried bar
+#' @param ... other params passed to UpsetR::upset
+#'
+#' @return plot
+#' @export
+#'
+#' @examples
+#'
+pl_upset_cluster_regulon <- function(regulon_cluster_mat, clusters = NULL, degs_table = NULL,
+                                  nintersects = NA, colors_clusters = NULL, color_queries = "tomato",
+                                  ...){
+  if(is.null(clusters))
+    clusters <- colnames(regulon_cluster_mat)
+  else
+    clusters <- intersect(clusters, colnames(regulon_cluster_mat))
+
+  upsetData <- regulon_cluster_mat[,clusters, drop = F] %>%
+    as.data.frame() %>%
+    rownames_to_column() %>%
+    mutate(gene = rowname %>%
+             gsub(pattern = " \\(\\d+g\\)", replacement = "") %>%
+             gsub(pattern = "_extended", replacement = "")) %>%
+    mutate(cluster = apply(.[,clusters, drop = F], 1, function(x) {paste0(clusters[x == 1], collapse = "::")}))
+
+  setMetaData <- list(
+    data = data.frame(rowname = clusters,  cluster = clusters),
+    plots=list(
+      list(type = "matrix_rows", column = "cluster",colors = colors_clusters)
+    )
+  )
+
+  # query deg
+  query_isDEG <- function(data, degs){
+    newdata <- data[["gene"]] %in% (
+      degs %>%
+        filter(cluster %in% str_split(data[["cluster"]], pattern = "::")[[1]]) %>%
+        pull(gene))
+  }
+
+  queries = list(list(query = query_isDEG, params = list(degs = degs_table), color= color_queries, active= T))
+  if(is.null(degs_table)) queries <- NULL
+  if(is.null(colors_clusters)) colors_bar <- "gray23" else colors_bar <- colors_clusters[colSums(upsetData[,clusters,drop = F]) %>%
+                                                                                 sort(decreasing = T) %>%
+                                                                                 names]
+  UpSetR::upset(
+    upsetData,
+    #nsets = length(clusters),
+    sets = clusters,
+    nintersects = nintersects,
+    #keep.order = T, sets = colnames(upsetData)[1:9], # keep.order is valid after sets being setted.
+    set.metadata = setMetaData, queries = queries,
+    sets.bar.color = colors_bar,
+    matrix.color = "grey10",
+    main.bar.color = "cyan4",
+    set_size.show = T,
+    shade.alpha = 0.5,
+    ...)
+}
+
+
+
+#' upper triangle heatmap of pairwise intersectin matrix
+#'
+#' @param mat matrix of 0 or 1 and 1 means the column has the rowname
+#' @param tri_fun upper.tri or lower.tri
+#' @param hide_diag hide diag color
+#' @param proportion_or_roe calculate scaled item
+#' @param dist distance method
+#' @param ... other params passed to pheatmap
+#' @inheritParams pheatmap::pheatmap
+#'
+#' @return pheatmap
+#' @export
+#'
+#' @examples
+#'
+pl_intersectHeatmap <- function(mat, tri_fun = upper.tri, hide_diag = T, proportion_or_roe = c("roe", "proportion"), dist = "correlation",
+                                color = colorRampPalette(c("grey90", RColorBrewer::brewer.pal(n = 7, name = "YlOrRd")))(100),
+                                clustering_method = "ward.D",
+                                treeheight_row = 25,
+                                treeheight_col = 25,
+                                border_color = "white", ...){
+  sym <- as.matrix(t(mat)) %*% as.matrix(mat)
+
+  proportion_or_roe <- match.arg(proportion_or_roe)
+  if(proportion_or_roe == "proportion"){
+    sym_z <- sym/sqrt(matrix(diag(sym), nrow = nrow(sym), ncol = ncol(sym), byrow = T) *
+                        matrix(diag(sym), nrow = nrow(sym), ncol = ncol(sym), byrow = F))
+  }else{
+    sym_z <- sym
+    for(i in 1:nrow(sym_z)){
+      for(j in 1:ncol(sym_z)){
+        sym_z[i, j] <- table(mat[,i], mat[,j]) %>% chisq_roe() %>% extract2("1","1")
+      }
+    }
+  }
+
+  if(is.null(tri_fun)) {
+    get_tri <- function(x){
+      x
+    }
+  }else{
+    get_tri <- function(x, diag = T) {
+      x[!tri_fun(x, diag = diag)] <- NA
+      return(x)
+    }
+  }
+
+  phres <- pheatmap(sym_z, display_numbers = sym,
+                    clustering_distance_rows = dist,
+                    clustering_distance_cols = dist,
+                    clustering_method = clustering_method,color = color)
+  dev.off()
+  if(hide_diag)  diag(sym_z) <- NA
+  pheatmap((sym_z[phres$tree_row$order, phres$tree_col$order] %>% get_tri)[phres$tree_row$labels, phres$tree_col$labels],
+           cluster_rows = phres$tree_row,
+           cluster_cols = phres$tree_col,
+           display_numbers = sym,
+           color = color,
+           treeheight_row = treeheight_row,
+           treeheight_col = treeheight_col,
+           border_color = border_color,
+           ...
+  )
+
+  return(list(sym, sym_z))
 }

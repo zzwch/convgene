@@ -7,8 +7,9 @@
 tl_goCompareCluster(
   degs_table,
   topn = 200,
-  enrichFun = "clusterProfiler::enrichGO",
-  OrgDb = "org.Hs.eg.db"
+  enrichFun = "enrichGO",
+  OrgDb = "org.Hs.eg.db",
+  ont = "BP"
 )
 }
 \arguments{
@@ -17,6 +18,8 @@ tl_goCompareCluster(
 \item{enrichFun}{enrich function name in clusterprofiler}
 
 \item{OrgDb}{"org.Hs.eg.db" or "org.Mm.eg.db according to your organism}
+
+\item{ont}{One of "BP", "MF", and "CC" subontologies, or "ALL" for all three.}
 }
 \value{
 a list of go and simplified go results

@@ -9,8 +9,10 @@ tl_statGene(
   group.by,
   group.1,
   group.2 = NULL,
-  FC_fun = Seurat::ExpMean,
-  stat_fun = stats::wilcox.test
+  FC_fun = function(x, pseudocount) {     Seurat::ExpMean(x + psuedocount) *
+    log2(exp(1)) },
+  stat_fun = stats::wilcox.test,
+  pseudocount = 0
 )
 }
 \arguments{
@@ -22,9 +24,11 @@ tl_statGene(
 
 \item{group.2}{character or vector}
 
-\item{FC_fun}{Seurat::ExpMean or base::mean}
+\item{FC_fun}{Seurat::ExpMean or base::mean. log2(e) is equal to 1/log(2)}
 
 \item{stat_fun}{wilcox.test or t.test}
+
+\item{pseudocount}{avoid NA in calculation of fold change}
 }
 \value{
 data.frame

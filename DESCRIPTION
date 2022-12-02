@@ -17,7 +17,7 @@ Imports:
     pheatmap,
     reshape2,
     reticulate
-RoxygenNote: 7.1.1
+RoxygenNote: 7.2.0
 Suggests: 
     testthat,
     knitr,
@@ -28,6 +28,7 @@ Collate:
     'utils.R'
     'pl.R'
     'pp.R'
+    'short.R'
     'tl.R'
 Depends: 
     R (>= 2.10)

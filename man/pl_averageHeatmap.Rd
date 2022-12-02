@@ -21,6 +21,7 @@ pl_averageHeatmap(
   cluster_rows = F,
   cluster_cols = F,
   show_rownames = F,
+  return.avg = F,
   ...
 )
 }
@@ -56,6 +57,8 @@ pl_averageHeatmap(
 \item{cluster_cols}{column clustering}
 
 \item{show_rownames}{show rownames}
+
+\item{return.avg}{return average data matrix}
 
 \item{...}{}
 }

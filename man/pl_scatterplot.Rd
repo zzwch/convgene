@@ -19,12 +19,13 @@ pl_scatterplot(
   ellipse_level = 0.5,
   ellipse_alpha = 0.8,
   ellipse_color = "white",
+  ellipse_hollow = F,
   ellipse_group_by = point_group_by,
   ellipse_groups = point_groups,
   show_center = F,
   center_method = SummariseExpr,
   center_size = 3,
-  center_shape = 1,
+  center_shape = 16,
   center_alpha = 1,
   center_group_by = ellipse_group_by,
   center_groups = ellipse_groups,
@@ -60,6 +61,8 @@ pl_scatterplot(
 \item{ellipse_alpha}{ellipse aes, a value of 0 to 1}
 
 \item{ellipse_color}{ellipse aes, a color}
+
+\item{ellipse_hollow}{ellipse hollow circle, color by group, fill by `ellipse_color`}
 
 \item{ellipse_group_by}{calc ellipse by which vector}
 

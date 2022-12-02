@@ -40,12 +40,12 @@ tl_calcFeatureScore(
 
 \item{cap_value}{the max value to show in dotplot. Any value larger than it will be capped to this value. (default: NA)}
 
-\item{gene_force}{Force gene suing zeros, which is missing in data.}
+\item{gene_force}{Force gene using zeros, if it is not in data.}
 
 \item{rescale_again}{do rescale again after summarisie}
 }
 \value{
-a list of mean and percentage data
+a vector of scores
 }
 \description{
 calculate average/median rescale expression of features (eg. genes) for each cell

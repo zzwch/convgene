@@ -86,6 +86,9 @@ tl_GeneSetScore <- function(
 #' @param topn robust top n genes of loadings
 #' @param reduction.name new reduction name
 #' @param use_all_genes get top n genes from all genes loadings, not just typically highly variable genes. This will call ProjectDim if inexist.
+#' @param data.scale.max scale parameter used in calculation of RPCA score. Set 0.99 or 0.95 as you like to exclude outliers.
+#' @param score.scale.max scale parameter used in calculation of RPCA score. Set 0.99 or 0.95 as you like to exclude outliers.
+#' @param loadings if set, use this loadings to calculate RPCA score
 #'
 #' @return updated Seurat3 object with a new pca_score reduction added
 #' @import Seurat
@@ -98,21 +101,28 @@ tl_RunPCAScore <- function(
   reduction = "pca",
   use_all_genes = T,
   topn = 30,
+  data.scale.max = 1,
   do.score.scale = T,
-  reduction.name = "rpca"){
+  score.scale.max = 1,
+  reduction.name = "rpca",
+  loadings = NULL){
 
   data <- GetAssayData(object, slot = slot, assay = assay)
   # SetDimReduction(object, "pca_score", "loadingData", object@dr$pca@loadingData)
   # SetDimReduction(object, "pca_score", "loadingData.full", object@dr$pca@loadingData.full)
 
-  loadingData <- Loadings(object, reduction = reduction, projected = use_all_genes)
-  if(min(dim(loadingData)) == 0){
-    if(use_all_genes){
-      object <- ProjectDim(object, reduction = reduction, assay = assay, do.center = T)
-      loadingData <- Loadings(object, reduction = reduction, projected = use_all_genes)
-    }else{
-      stop("Please RunPCA first. You may also run ProjectDim thereafter.")
+  if(is.null(loadings)) {
+    loadingData <- Loadings(object, reduction = reduction, projected = use_all_genes)
+    if(min(dim(loadingData)) == 0){
+      if(use_all_genes){
+        object <- ProjectDim(object, reduction = reduction, assay = assay, do.center = T)
+        loadingData <- Loadings(object, reduction = reduction, projected = use_all_genes)
+      }else{
+        stop("Please RunPCA first. You may also run ProjectDim thereafter.")
+      }
     }
+  }else{
+    loadingData <- loadings
   }
 
   object@reductions[[reduction.name]] <- object@reductions[[reduction]]
@@ -127,14 +137,15 @@ tl_RunPCAScore <- function(
     features.pos <- names(sort(loadingData[,i], decreasing = T)[1:topn])
     features.neg <- names(sort(loadingData[,i], decreasing = F)[1:topn])
     features.use <- c(features.pos, features.neg)
-    data.scale = data[features.use, ] / apply(data[features.use, ], 1, max)
+    data.scale = pmin(data[features.use, ] / apply(data[features.use, ], 1, quantile, probs = data.scale.max), 1)
+    data.scale[is.na(data.scale)] <- 0
 
     score.data <- data.frame(neg = Matrix::colSums(data.scale[features.neg, ]),
                              pos = Matrix::colSums(data.scale[features.pos, ]))
     rownames(score.data) <- colnames(data.scale)
     if(do.score.scale){
-      score.data$pos <- score.data$pos / max(score.data$pos)
-      score.data$neg <- score.data$neg / max(score.data$neg)
+      score.data$pos <- pmin(score.data$pos / quantile(score.data$pos, probs = score.scale.max), 1)
+      score.data$neg <- pmin(score.data$neg / quantile(score.data$neg, probs = score.scale.max), 1)
     }
     rpcaEmbedData[,paste0(i,  c(".pos",".neg",".score"))] <- as.matrix(cbind(score.data, score.data$pos - score.data$neg))
   }
@@ -238,8 +249,9 @@ tl_PairwiseDEGs <- function(
 #' @param group.by vector
 #' @param group.1 character or vector
 #' @param group.2 character or vector
-#' @param FC_fun Seurat::ExpMean or base::mean
+#' @param FC_fun Seurat::ExpMean or base::mean. log2(e) is equal to 1/log(2)
 #' @param stat_fun wilcox.test or t.test
+#' @param pseudocount avoid NA in calculation of fold change
 #'
 #' @return data.frame
 #' @export
@@ -251,21 +263,27 @@ tl_statGene <- function(
   group.by,
   group.1,
   group.2 = NULL,
-  FC_fun = Seurat::ExpMean,
-  stat_fun = stats::wilcox.test){
+  FC_fun = function(x, pseudocount) {Seurat::ExpMean(x + pseudocount)*log2(exp(1))},
+  stat_fun = stats::wilcox.test,
+  pseudocount = 0){
+
   ind_1 <- group.by %in% group.1
   ind_2 <- if(is.null(group.2)) !group.by %in% group.1 else group.by %in% group.2
 
-  FC <- apply(data, 1, function(expr) {FC_fun(expr[ind_1]) - FC_fun(expr[ind_2])}) * log2(exp(1))
+  AVG <- apply(data, 1, function(expr) {c(FC_fun(expr[ind_1], pseudocount), FC_fun(expr[ind_2], pseudocount))}) %>% t %>% as.data.frame()
+  FC <- AVG[,1] - AVG[,2]
+
   P <- apply(data, 1, function(expr) {stat_fun(expr[ind_1], expr[ind_2])$p.value})
   data.frame(
     gene = rownames(data) %>% as.character(),
+    avg.1 = AVG[,1],
+    avg.2 = AVG[,2],
     log2foldchange = FC,
     pvalue = P,
     p.adjust = p.adjust(P, "fdr")
   )
 }
-
+function(x1, x2) {list(avg.1 = Seurat::ExpMean(x1), avg.2 = Seurat::ExpMean(x2), log2foldchange = log2(exp(1))*(Seurat::ExpMean(x1) - Seurat::ExpMean(x2)))}
 #' Prepare genelist for GSEA
 #'
 #' @param data expression matrix
@@ -454,13 +472,13 @@ tl_RunSlingshot <- function(
 #' @param log_base base::exp(1) or 2 or other else, depends on your normalization method.
 #' @param exclude_zero exclude zeros when calculate average/median feature value. Note exclude_zero first, outlier_cutoff second.
 #' @param outlier_cutoff sometimes outliers (several extremely high cells) should be excluded when do summarise. Set 0.99 to exclude top 1 percent cells. (default: 1)
-#' @param gene_force Force gene suing zeros, which is missing in data.
+#' @param gene_force Force gene using zeros, if it is not in data.
 #' @param cap_value the max value to show in dotplot. Any value larger than it will be capped to this value. (default: NA)
 #' @param rescale_max rescale data
 #' @param rescale_min rescale data
 #' @param rescale_again do rescale again after summarisie
 #'
-#' @return a list of mean and percentage data
+#' @return a vector of scores
 #' @export
 #'
 #' @examples
@@ -626,20 +644,22 @@ tl_crossTableEnrichment <- function(
 #' @param degs_table deg results from FindAllMarkers
 #' @param enrichFun enrich function name in clusterprofiler
 #' @param OrgDb "org.Hs.eg.db" or "org.Mm.eg.db according to your organism
+#' @param topn
+#' @param ont One of "BP", "MF", and "CC" subontologies, or "ALL" for all three.
 #'
 #' @return a list of go and simplified go results
 #' @export
 #'
 #' @examples
 #'
-tl_goCompareCluster <- function(degs_table, topn = 200, enrichFun = "clusterProfiler::enrichGO",
-                               OrgDb = "org.Hs.eg.db"){
+tl_goCompareCluster <- function(degs_table, topn = 200, enrichFun = "enrichGO",
+                               OrgDb = "org.Hs.eg.db", ont = "BP"){
   # clusterprofiler
   message("Enrichment analysis using clusterProfiler...")
   cluster_go <- clusterProfiler::compareCluster(
     data = degs_table %>% group_by(cluster) %>% top_n(topn, -p_val) %>% top_n(topn, avg_logFC),
     geneClusters = gene~cluster, fun = enrichFun,
-    OrgDb = OrgDb, keyType = "SYMBOL", ont = "BP")
+    OrgDb = OrgDb, keyType = "SYMBOL", ont = ont)
   #message("Simplify enrichment results...")
   #cluster_go_sim <- simplify(cluster_go)
 
@@ -790,3 +810,119 @@ tl_CellCycleAssign <- function(object, phase.name = "Phase4", s.th = 0, g2m.th =
 
   return(object)
 }
+
+
+#' calc Regulon Specificity Score (RSS) or named TFSS
+#'
+#' @param aucData auc scores matrix derived from SCENIC (e.g., 3.4_regulonAUC.Rds)
+#' @param binData binary matrix
+#' @param group_by a vector of clusters
+#' @param groups clusters to be used
+#' @param sig.auc.min,sig.bin.min,sig.rssz.min Regulon with AUCell score > sig.auc.min, Binary Activaty > sig.bin.min and RSSZ > sig.rssz.min were considered to be significant.
+#' @param pseudocount used as numerator and denominator constant for calculation of fold change
+#'
+#' @return list of 1) matrix of group aggregated AUC scores, 2) matrix of Z-score normalized RSS, 3) data.frame of significant regulon
+#'
+#' @export
+#'
+#' @examples
+#'
+tl_regulon_specificity <- function(aucData, binData, group_by, groups = NULL, sig.auc.min = 0, sig.bin.min = 0.1, sig.rssz.min = 1, pseudocount = 0.01){
+  if(is.null(groups)) {
+    groups <- sort(unique(group_by))
+  } else {
+    tmp <- SubsetDataAndGroup(aucData, group_by, groups)
+    aucData <- tmp$data
+    group_by <- tmp$group_by
+    groups <- sort(unique(group_by))
+
+    tmp <- SubsetDataAndGroup(binData, group_by, groups)
+    binData <- tmp$data
+
+  }
+
+  if(!all(colnames(aucData) == colnames(binData))) stop("data colnames is not identical!")
+  group_mat <- lapply(groups, function(i) {as.numeric(group_by == i)}) %>% do.call(what = rbind)
+  # apply(aucData, 1, function(i) {
+  #   apply(group_mat, 1, function(j) {
+  #     philentropy::JSD(rbind(i, j), est.prob = "empirical")
+  #   })
+  # })
+  jsd <- philentropy::JSD(rbind(aucData, group_mat), est.prob = "empirical")[1:nrow(aucData), nrow(aucData)+(1:nrow(group_mat))]
+  rss <- 1-sqrt(jsd)
+  rownames(rss) <- rownames(aucData)
+  colnames(rss) <- groups
+
+  rssz <- t(scale(t(rss)))
+
+  aucg <- apply(aucData, 1, function(x) { tapply(x, group_by, mean)}) %>% t
+  bing <- apply(binData, 1, function(x) { tapply(x, group_by, mean)}) %>% t
+
+  myMerge <- function(x,y){merge(x,y)}
+
+  sig <- Reduce(f = myMerge,
+                list(
+                  aucg %>% as.data.frame() %>% rownames_to_column() %>%
+                    pivot_longer(!all_of("rowname"), values_to = "gAUC"),
+                  bing %>% as.data.frame() %>% rownames_to_column() %>%
+                    pivot_longer(!all_of("rowname"), values_to = "gBinAct"),
+                  rss %>% as.data.frame() %>% rownames_to_column() %>%
+                    pivot_longer(!all_of("rowname"), values_to = "RSS"),
+                  rssz %>% as.data.frame() %>% rownames_to_column() %>%
+                    pivot_longer(!all_of("rowname"), values_to = "RSSZ")
+                  )
+                ) %>%
+    mutate(significant = (gAUC > sig.auc.min) & (gBinAct > sig.bin.min) & (RSSZ > sig.rssz.min),
+           power = gBinAct*RSS,
+           powerz = gBinAct*RSSZ,
+           name = factor(name, levels = groups)) %>%
+    arrange(name, desc(RSS))
+  colnames(sig)[1:2] <- c("regulon", "cluster")
+
+  # differentially active regulons: DAR
+  dar <- lapply(groups, function(x) {
+    statData <- convgene::tl_statGene(aucData, group.by = group_by, group.1 = x, FC_fun = function(x, p) {log2(pseudocount + mean(x))}, pseudocount = pseudocount)
+    statData$cluster = x
+    return(statData)
+  }) %>% dplyr::bind_rows()
+
+  return(list(
+    single = list(AUC = aucData, BIN = binData),
+    group = list(AUC = aucg, BIN = bing),
+    longer = sig,
+    dar = dar)
+    )
+}
+
+
+#' categorize gene as expressed or not based on detection rate and non-zero median expression level
+#'
+#' @param data feature by cell matrix
+#' @param group_by cell annotation vector
+#'
+#' @return data.frame of detection, nzmedian, expressed, cluster
+#' @export
+#'
+#' @examples
+#'
+tl_geneExpressed <- function(data, group_by = NULL){
+  if(IsNULLorNA(group_by)) group_by <- rep("All", ncol(data))
+
+  lapply(sort(unique(group_by)), function(i) {
+    det_i <- Matrix::rowSums(data >0)/ncol(data)
+    det_i_th <- median(det_i)
+
+    nzmedian_i <- apply(data, 1, function(x) median(x[x>0]))
+    nzmedian_i_th <- data %>% median(.[.>0])
+
+    gene_i <- (det_i > det_i_th) & (nzmedian_i > nzmedian_i_th)
+
+    return(data.frame(detection = det_i,
+                      nzmedian = nzmedian_i,
+                      expressed = gene_i,
+                      cluster = i) %>%
+             rownames_to_column(var = "gene")
+    )
+  }) %>% do.call(what = rbind)
+}
+
